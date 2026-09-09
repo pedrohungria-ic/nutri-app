@@ -1147,10 +1147,10 @@ function SugerirPanel({ data, cfg, dia, tot, meal, onClose, onLancar, onSalvarAl
         ? `fechar a meta da refeição "${meal.nome}"`
         : `corrigir o dia inteiro usando a refeição "${meal.nome}"`;
 
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
+      const r = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6", max_tokens: 1200,
+          model: "claude-sonnet-5", max_tokens: 1200,
           messages: [{ role: "user", content: `Você é nutricionista esportivo de um praticante que treina 6x/semana. Objetivo: ${escopo}.
 
 Já consumido nesta refeição: ${jaTem}
@@ -1313,10 +1313,10 @@ function VozPanel({ meals, mealFixo, onClose, onLancar }) {
     parar(); setProc(true); setErro("");
     try {
       const nomes = meals.map((m) => m.nome).join(" | ");
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
+      const r = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6", max_tokens: 1400,
+          model: "claude-sonnet-5", max_tokens: 1400,
           messages: [{ role: "user", content: `Ditado de registro alimentar brasileiro: "${txt}"
 
 Refeições disponíveis: ${nomes}
@@ -1429,9 +1429,9 @@ function FoodSheet({ data, meal, onClose, onAdd, onFav, onCustom }) {
   }, [q, custom, favs]);
 
   async function claude(content, tokens) {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
+    const r = await fetch("/api/claude", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: tokens || 800, messages: [{ role: "user", content }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: tokens || 800, messages: [{ role: "user", content }] }),
     });
     const j = await r.json();
     return (j.content || []).map((c) => c.text || "").join("");
@@ -2384,10 +2384,10 @@ function ExamesPanel({ campos, exames, contextos, onCampos, onSalvar, onContexto
       const bloco = isPdf
         ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }
         : { type: "image", source: { type: "base64", media_type: file.type === "image/png" ? "image/png" : "image/jpeg", data: b64 } };
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      const resp = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6", max_tokens: 1000,
+          model: "claude-sonnet-5", max_tokens: 1000,
           messages: [{ role: "user", content: [bloco, {
             type: "text", text: `Extraia todos os resultados numéricos de exames laboratoriais deste documento. Ignore tabelas de referência, notas e textos explicativos — só o resultado medido de cada exame.
 
