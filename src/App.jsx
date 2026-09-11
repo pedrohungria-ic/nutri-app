@@ -179,9 +179,9 @@ const somar = (items) => (items || []).reduce((a, it) => {
 }, { kcal: 0, prot: 0, carb: 0, gord: 0 });
 
 const MACROS = [
-  { k: "carb", lb: "carb", nome: "Carbo", cor: "var(--orange)", txt: "var(--orange-d)", bg: "var(--orange-s)" },
-  { k: "prot", lb: "prot", nome: "Proteína", cor: "var(--lime)", txt: "var(--lime-d)", bg: "var(--lime-s)" },
-  { k: "gord", lb: "gord", nome: "Gordura", cor: "var(--violet)", txt: "var(--violet-d)", bg: "var(--violet-s)" },
+  { k: "carb", lb: "carb", nome: "Carbo", icone: "🍞", cor: "var(--orange)", txt: "var(--orange-d)", bg: "var(--orange-s)" },
+  { k: "prot", lb: "prot", nome: "Prot", icone: "🥩", cor: "var(--lime)", txt: "var(--lime-d)", bg: "var(--lime-s)" },
+  { k: "gord", lb: "gord", nome: "Gord", icone: "🧈", cor: "var(--violet)", txt: "var(--violet-d)", bg: "var(--violet-s)" },
 ];
 
 const MEDIDAS_CAMPOS = [
@@ -240,10 +240,13 @@ width:56px;height:56px;border-radius:999px;background:var(--coral);color:#fff;fo
 display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(245,56,93,.4)}
 .nx .fab:active{transform:scale(.94)}
 .nx .fab[data-on="1"]{background:var(--ink)}
+.nx .condensada{position:fixed;top:0;left:0;right:0;z-index:44;background:#fff;padding:8px 14px;
+display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 2px 8px rgba(27,37,89,.1);flex-wrap:wrap}
 .nx .fabMenu{position:fixed;right:20px;bottom:calc(146px + env(safe-area-inset-bottom));z-index:46;display:flex;flex-direction:column;gap:9px;align-items:flex-end}
 @media (min-width:540px){
   .nx .fab{right:calc(50% - 240px + 20px)}
   .nx .fabMenu{right:calc(50% - 240px + 20px)}
+  .nx .condensada{left:50%;right:auto;transform:translateX(-50%);width:480px;box-shadow:0 2px 8px rgba(27,37,89,.1),0 0 0 1px var(--rule)}
 }
 
 .nx .strip{background:var(--card);border-radius:14px;padding:10px 13px;margin-bottom:12px;box-shadow:0 1px 2px rgba(27,37,89,.05)}
@@ -305,6 +308,7 @@ export default function Nutri() {
   const [sugestao, setSugestao] = useState(null);
   const [modeloOpen, setModeloOpen] = useState(false);
   const [copiarFuturoMeal, setCopiarFuturoMeal] = useState(null);
+  const [condensado, setCondensado] = useState(false);
   const [favoritarMeal, setFavoritarMeal] = useState(null);
   const [usarFavoritaMeal, setUsarFavoritaMeal] = useState(null);
   const [clip, setClip] = useState(null);
@@ -384,6 +388,14 @@ export default function Nutri() {
   if (!data) return <div className="nx"><style>{CSS}</style><div className="eb">Carregando…</div></div>;
   const shift = (k) => { const d = fromIso(day); d.setDate(d.getDate() + k); setDay(iso(d)); };
 
+  useEffect(() => {
+    if (tab !== "dia") { setCondensado(false); return; }
+    const aoRolar = () => setCondensado(window.scrollY > 170);
+    window.addEventListener("scroll", aoRolar, { passive: true });
+    aoRolar();
+    return () => window.removeEventListener("scroll", aoRolar);
+  }, [tab]);
+
   return (
     <div className="nx">
       <style>{CSS}</style>
@@ -407,6 +419,15 @@ export default function Nutri() {
             </div>
           </div>
 
+          {condensado && (
+            <BarraCondensada
+              pesos={data.pesos || {}} day={day}
+              medLista={cfg.medicamentos} medMarcados={dia.medicamentos || []}
+              suppLista={cfg.supps} suppMarcados={dia.supps || []}
+              marcLista={cfg.marcadores} marcValores={dia.marcadores || {}}
+              tot={tot} cfg={metaHoje} />
+          )}
+
           <PainelTopo
             pesos={data.pesos || {}} day={day}
             onSetPeso={(kg) => persist({ ...data, pesos: { ...(data.pesos || {}), [day]: kg } })}
@@ -414,9 +435,12 @@ export default function Nutri() {
             onToggleMed={(s) => setDia({ medicamentos: (dia.medicamentos || []).includes(s) ? dia.medicamentos.filter((z) => z !== s) : [...(dia.medicamentos || []), s] })}
             suppLista={cfg.supps} suppMarcados={dia.supps || []}
             onToggleSupp={(s) => setDia({ supps: (dia.supps || []).includes(s) ? dia.supps.filter((z) => z !== s) : [...(dia.supps || []), s] })}
+            marcLista={cfg.marcadores} marcValores={dia.marcadores || {}}
+            onMarcValor={(id, v) => setDia({ marcadores: { ...(dia.marcadores || {}), [id]: v } })}
+            onMarcLista={(l) => persist({ ...data, config: { ...cfg, marcadores: l } })}
           />
 
-          <Resumo tot={tot} cfg={metaHoje} />
+          <LinhaMacros tot={tot} cfg={metaHoje} />
 
           {dia.meals.map((m) => (
             <MealCard
@@ -434,10 +458,6 @@ export default function Nutri() {
               onDelete={() => setDia({ meals: dia.meals.filter((x) => x.id !== m.id) })}
             />
           ))}
-
-          <Marcadores lista={cfg.marcadores} valores={dia.marcadores || {}}
-            onValor={(id, v) => setDia({ marcadores: { ...(dia.marcadores || {}), [id]: v } })}
-            onLista={(l) => persist({ ...data, config: { ...cfg, marcadores: l } })} />
 
           {fabMenu && (
             <div className="fabMenu">
@@ -572,13 +592,41 @@ export default function Nutri() {
 }
 
 /* ---------- suplementos: fino, no topo, expansível, editável ---------- */
-function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico, onToggleMed, suppLista, suppMarcados, onToggleSupp }) {
+function BarraCondensada({ pesos, day, medLista, medMarcados, suppLista, suppMarcados, marcLista, marcValores, tot, cfg }) {
+  const medHoje = medLista.filter((m) => suppleDue(m, day));
+  const medFeito = medHoje.filter((m) => medMarcados.includes(m.nome)).length;
+  const suppHoje = suppLista.filter((s) => suppleDue(s, day));
+  const suppFeito = suppHoje.filter((s) => suppMarcados.includes(s.nome)).length;
+  const marcPreenchidos = marcLista.filter((m) => marcValores[m.id] != null);
+  const marcMedia = marcPreenchidos.length ? marcPreenchidos.reduce((a, m) => a + marcValores[m.id], 0) / marcPreenchidos.length : null;
+
+  const Item = ({ v }) => <span className="num" style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ink2)" }}>{v}</span>;
+  const Sep = () => <span style={{ color: "var(--rule)" }}>│</span>;
+
+  return (
+    <div className="condensada">
+      <Item v={pesos[day] != null ? `${n1(pesos[day])}kg` : "—"} /><Sep />
+      <Item v={`${medFeito}/${medHoje.length}`} /><Sep />
+      <Item v={`${suppFeito}/${suppHoje.length}`} /><Sep />
+      <Item v={marcMedia != null ? `${marcMedia.toFixed(1)}/5` : "—"} />
+      <span style={{ width: 12 }} />
+      <Item v={`${fmt(tot.kcal)}/${fmt(cfg.kcal)}`} /><Sep />
+      <Item v={`${fmt(tot.carb)}/${fmt(cfg.carb)}`} /><Sep />
+      <Item v={`${fmt(tot.prot)}/${fmt(cfg.prot)}`} /><Sep />
+      <Item v={`${fmt(tot.gord)}/${fmt(cfg.gord)}`} />
+    </div>
+  );
+}
+
+function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico, onToggleMed, suppLista, suppMarcados, onToggleSupp, marcLista, marcValores, onMarcValor, onMarcLista }) {
   const [aberto, setAberto] = useState(null);
 
   const medHoje = medLista.filter((m) => suppleDue(m, day));
   const medFeito = medHoje.filter((m) => medMarcados.includes(m.nome)).length;
   const suppHoje = suppLista.filter((s) => suppleDue(s, day));
   const suppFeito = suppHoje.filter((s) => suppMarcados.includes(s.nome)).length;
+  const marcPreenchidos = marcLista.filter((m) => marcValores[m.id] != null);
+  const marcMedia = marcPreenchidos.length ? marcPreenchidos.reduce((a, m) => a + marcValores[m.id], 0) / marcPreenchidos.length : null;
 
   const Mini = ({ k, icone, titulo, valor, cor }) => (
     <button onClick={() => setAberto(aberto === k ? null : k)}
@@ -594,8 +642,9 @@ function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico
     <div style={{ marginBottom: 10 }}>
       <div style={{ display: "flex", gap: 7 }}>
         <Mini k="peso" icone="⚖️" titulo="Peso" valor={pesos[day] != null ? `${n1(pesos[day])}kg` : "—"} />
-        <Mini k="med" icone="🧠" titulo="Meds" valor={`${medFeito}/${medHoje.length}`} cor={medFeito === medHoje.length && medHoje.length ? "var(--lime-d)" : "var(--ink2)"} />
-        <Mini k="supp" icone="💊" titulo="Suplem." valor={`${suppFeito}/${suppHoje.length}`} cor={suppFeito === suppHoje.length && suppHoje.length ? "var(--lime-d)" : "var(--ink2)"} />
+        <Mini k="med" icone="💊" titulo="Meds" valor={`${medFeito}/${medHoje.length}`} cor={medFeito === medHoje.length && medHoje.length ? "var(--lime-d)" : "var(--ink2)"} />
+        <Mini k="supp" icone="💪" titulo="Supl" valor={`${suppFeito}/${suppHoje.length}`} cor={suppFeito === suppHoje.length && suppHoje.length ? "var(--lime-d)" : "var(--ink2)"} />
+        <Mini k="humor" icone="😊" titulo="Humor" valor={marcMedia != null ? `${marcMedia.toFixed(1)}/5` : "—"} cor={marcMedia != null ? "var(--violet-d)" : "var(--ink2)"} />
       </div>
 
       {aberto && (
@@ -603,6 +652,7 @@ function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico
           {aberto === "peso" && <PesoConteudo pesos={pesos} day={day} onSet={onSetPeso} />}
           {aberto === "med" && <ListaConteudo lista={medLista} marcados={medMarcados} historico={medHistorico} day={day} onToggle={onToggleMed} comDose />}
           {aberto === "supp" && <ListaConteudo lista={suppLista} marcados={suppMarcados} day={day} onToggle={onToggleSupp} />}
+          {aberto === "humor" && <Marcadores lista={marcLista} valores={marcValores} onValor={onMarcValor} onLista={onMarcLista} embutido />}
         </div>
       )}
     </div>
@@ -684,10 +734,47 @@ function ListaConteudo({ lista, marcados, historico, day, onToggle, comDose }) {
   );
 }
 
-function Marcadores({ lista, valores, onValor, onLista }) {
+function Marcadores({ lista, valores, onValor, onLista, embutido }) {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState(false);
   const preenchidos = lista.filter((m) => valores[m.id] != null).length;
+
+  const conteudo = (
+    <div style={embutido ? {} : { marginTop: 10 }}>
+      {lista.map((m, i) => (
+        <div key={m.id} style={{ padding: "9px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
+          {edit ? (
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input value={m.nome} style={{ flex: 1, padding: "7px 9px", fontSize: 13 }}
+                onChange={(e) => onLista(lista.map((z, k) => (k === i ? { ...z, nome: e.target.value } : z)))} />
+              <button className="mini" onClick={() => onLista(lista.filter((_, k) => k !== i))}>✕</button>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 13.5, fontWeight: valores[m.id] != null ? 600 : 400, marginBottom: 7 }}>{m.nome}</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} onClick={() => onValor(m.id, valores[m.id] === n ? null : n)}
+                    style={{ flex: 1, padding: "9px 0", borderRadius: 8, fontWeight: 700, fontSize: 13,
+                      background: valores[m.id] === n ? "var(--violet)" : "var(--bg)",
+                      color: valores[m.id] === n ? "#fff" : "var(--ink2)" }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
+        <button className="ghost" style={{ flex: 1 }} onClick={() => setEdit(!edit)}>{edit ? "concluir" : "editar lista"}</button>
+        {edit && <button className="ghost" onClick={() => onLista([...lista, { id: uid(), nome: "Novo marcador" }])}>+ item</button>}
+      </div>
+      <div className="eb" style={{ marginTop: 9, lineHeight: 1.5 }}>1 = baixo, 5 = alto. Preencha quando lembrar — não precisa ser todo dia.</div>
+    </div>
+  );
+
+  if (embutido) return conteudo;
 
   return (
     <div className="strip">
@@ -701,41 +788,7 @@ function Marcadores({ lista, valores, onValor, onLista }) {
         </div>
         <span style={{ color: "var(--ink3)", fontSize: 12 }}>{open ? "▲" : "▼"}</span>
       </button>
-
-      {open && (
-        <div style={{ marginTop: 10 }}>
-          {lista.map((m, i) => (
-            <div key={m.id} style={{ padding: "9px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
-              {edit ? (
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input value={m.nome} style={{ flex: 1, padding: "7px 9px", fontSize: 13 }}
-                    onChange={(e) => onLista(lista.map((z, k) => (k === i ? { ...z, nome: e.target.value } : z)))} />
-                  <button className="mini" onClick={() => onLista(lista.filter((_, k) => k !== i))}>✕</button>
-                </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: 13.5, fontWeight: valores[m.id] != null ? 600 : 400, marginBottom: 7 }}>{m.nome}</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button key={n} onClick={() => onValor(m.id, valores[m.id] === n ? null : n)}
-                        style={{ flex: 1, padding: "9px 0", borderRadius: 8, fontWeight: 700, fontSize: 13,
-                          background: valores[m.id] === n ? "var(--violet)" : "var(--bg)",
-                          color: valores[m.id] === n ? "#fff" : "var(--ink2)" }}>
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-          <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
-            <button className="ghost" style={{ flex: 1 }} onClick={() => setEdit(!edit)}>{edit ? "concluir" : "editar lista"}</button>
-            {edit && <button className="ghost" onClick={() => onLista([...lista, { id: uid(), nome: "Novo marcador" }])}>+ item</button>}
-          </div>
-          <div className="eb" style={{ marginTop: 9, lineHeight: 1.5 }}>1 = baixo, 5 = alto. Preencha quando lembrar — não precisa ser todo dia.</div>
-        </div>
-      )}
+      {open && conteudo}
     </div>
   );
 }
@@ -909,30 +962,60 @@ function Pills({ m, metas }) {
 }
 
 /* ---------- resumo do dia ---------- */
-function Resumo({ tot, cfg }) {
+/* ---------- linha de macros do dia ---------- */
+function LinhaMacros({ tot, cfg }) {
+  const [aberto, setAberto] = useState(false);
   const over = tot.kcal > cfg.kcal;
-  const pct = Math.min(100, (tot.kcal / (cfg.kcal || 1)) * 100);
+  const pctKcal = Math.min(100, (tot.kcal / (cfg.kcal || 1)) * 100);
+
+  const Mini = ({ icone, titulo, valor, meta, cor }) => (
+    <button onClick={() => setAberto(!aberto)}
+      style={{ flex: 1, background: "var(--card)", borderRadius: 12, padding: "9px 6px",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 2, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
+      <span style={{ fontSize: 15 }}>{icone}</span>
+      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--ink)" }}>{titulo}</span>
+      <span className="num" style={{ fontSize: 10.5, fontWeight: 800, color: cor || "var(--ink2)" }}>{fmt(valor)}/{fmt(meta)}</span>
+    </button>
+  );
+
   return (
-    <div className="card" style={{ padding: "11px 13px", marginBottom: 10 }}>
-      <div className="row" style={{ alignItems: "center", marginBottom: 7 }}>
-        <div className="eb" style={{ fontWeight: 700 }}>Calorias hoje</div>
-        <span className="num" style={{ fontSize: 13.5, fontWeight: 800 }}>
-          {fmt(tot.kcal)}<span style={{ color: "var(--ink2)", fontWeight: 500 }}> / {fmt(cfg.kcal)} kcal</span>
-        </span>
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 7 }}>
+        <Mini icone="🔥" titulo="Kcal" valor={tot.kcal} meta={cfg.kcal} cor={over ? "var(--coral-d)" : "var(--ink)"} />
+        {MACROS.map((x) => <Mini key={x.k} icone={x.icone} titulo={x.nome} valor={tot[x.k]} meta={cfg[x.k]} cor={x.txt} />)}
       </div>
-      <div className="track" style={{ marginBottom: 9, height: 6 }}>
-        <div className="fill" style={{ width: `${pct}%`, background: over ? "var(--coral)" : "var(--ink)" }} />
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
-        {MACROS.map((x) => (
-          <div key={x.k} style={{ background: x.bg, borderRadius: 9, padding: "6px 7px", textAlign: "center" }}>
-            <div className="eb" style={{ color: x.txt, fontSize: 9.5, fontWeight: 700 }}>{x.nome}</div>
-            <div className="num" style={{ fontWeight: 800, fontSize: 12.5, color: x.txt }}>
-              {fmt(tot[x.k])}<span style={{ fontWeight: 500, fontSize: 9.5 }}>/{fmt(cfg[x.k])}g</span>
-            </div>
+
+      {aberto && (
+        <div className="card" style={{ padding: 14, marginTop: 8 }}>
+          <div className="row" style={{ alignItems: "center", marginBottom: 7 }}>
+            <span className="eb" style={{ fontWeight: 700 }}>🔥 Calorias</span>
+            <span className="num" style={{ fontSize: 13.5, fontWeight: 800, color: over ? "var(--coral-d)" : "var(--ink)" }}>{n0(pctKcal)}%</span>
           </div>
-        ))}
-      </div>
+          <div className="row" style={{ marginBottom: 6 }}>
+            <span className="eb">{fmt(tot.kcal)} / {fmt(cfg.kcal)} kcal</span>
+          </div>
+          <div className="track" style={{ marginBottom: 16, height: 7 }}>
+            <div className="fill" style={{ width: `${pctKcal}%`, background: over ? "var(--coral)" : "var(--ink)" }} />
+          </div>
+          {MACROS.map((x, i) => {
+            const v = tot[x.k], meta = cfg[x.k] || 1;
+            const pct = Math.min(100, (v / meta) * 100);
+            return (
+              <div key={x.k} style={{ marginBottom: i < MACROS.length - 1 ? 14 : 0 }}>
+                <div className="row" style={{ marginBottom: 5 }}>
+                  <span className="eb" style={{ fontWeight: 700, color: x.txt }}>{x.icone} {x.nome}</span>
+                  <span className="num" style={{ fontSize: 12.5, fontWeight: 800, color: x.txt }}>{n0(pct)}%</span>
+                </div>
+                <div className="eb" style={{ marginBottom: 5 }}>{fmt(v)} / {fmt(meta)} g</div>
+                <div className="track" style={{ background: x.bg, height: 7 }}>
+                  <div className="fill" style={{ width: `${pct}%`, background: x.cor }} />
+                </div>
+              </div>
+            );
+          })}
+          <button className="ghost" style={{ width: "100%", marginTop: 14 }} onClick={() => setAberto(false)}>recolher</button>
+        </div>
+      )}
     </div>
   );
 }
