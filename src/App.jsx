@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { supabase } from "./supabaseClient.js";
 
 const KEY = "nutri:v4";
 const LEGADO = ["nutri:v3", "nutri:v2"];
@@ -109,13 +110,13 @@ const MEALS_PADRAO = [
   { nome: "Ceia", hora: "22:00" },
 ].map((m) => ({ ...m, id: uid(), alvo: null }));
 
-const REFEICOES_MODELO_PADRAO = [{ id: uid(), nome: "Padrão", padrao: true, meals: MEALS_PADRAO }];
+const REFEICOES_MODELO_PADRAO = [{ id: uid(), nome: "Padrão", padrao: true, meals: MEALS_PADRAO, metaAgua: 2500 }];
 
 const CONFIG_PADRAO = {
   refeicoesModelos: REFEICOES_MODELO_PADRAO,
   supps: ["Creatina 5 g", "Whey", "BCAA", "Vitamina D", "Ômega 3", "Magnésio"].map((nome) => ({ id: uid(), nome, cadaDias: 1, ancora: "2024-01-01" })),
   marcadores: ["Qualidade do sono", "Cansaço ao acordar", "Produtividade", "Bem-estar", "Irritabilidade", "Estresse", "Ansiedade"].map((nome) => ({ id: uid(), nome })),
-  medicamentos: ["Testosterona", "Anastrozol"].map((nome) => ({ id: uid(), nome, cadaDias: nome === "Anastrozol" ? 7 : 4, ancora: "2024-01-01" })),
+  medicamentos: ["Testosterona", "Anastrozol"].map((nome) => ({ id: uid(), nome, cadaDias: nome === "Anastrozol" ? 7 : 4, ancora: "2024-01-01", excecao: "manter" })),
 };
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -133,8 +134,10 @@ function normalizeSupps(supps) {
     : { cadaDias: 1, ancora: iso(new Date()), ...s });
 }
 function suppleDue(s, day) {
+  if (!s.ancora) return false;
+  if (day < s.ancora) return false;
   if (!s.cadaDias || s.cadaDias <= 1) return true;
-  const d = diffDias(day, s.ancora || day);
+  const d = diffDias(day, s.ancora);
   return d >= 0 && d % s.cadaDias === 0;
 }
 function normalizeConfig(raw) {
@@ -309,6 +312,8 @@ export default function Nutri() {
   const [modeloOpen, setModeloOpen] = useState(false);
   const [copiarFuturoMeal, setCopiarFuturoMeal] = useState(null);
   const [condensado, setCondensado] = useState(false);
+  const [fotoHeader, setFotoHeader] = useState(null);
+  const [userMenu, setUserMenu] = useState(false);
   const [favoritarMeal, setFavoritarMeal] = useState(null);
   const [usarFavoritaMeal, setUsarFavoritaMeal] = useState(null);
   const [clip, setClip] = useState(null);
@@ -376,7 +381,7 @@ export default function Nutri() {
     const rec = [...novos.map((x) => { const c = { ...x }; delete c.g; delete c.id; return c; }), ...(data.recentes || [])]
       .filter((v, i, a) => a.findIndex((z) => z.nome === v.nome) === i).slice(0, 30);
     persist({ ...data, recentes: rec, days: { ...data.days, [day]: { ...dia, meals } } });
-    flash(`${novos.length} item(ns) → ${alvo ? alvo.nome : "refeição"}`);
+    flash(`${novos.length} item(ns) → ${alvo ? alvo.nome : "dieta"}`);
   }
 
   function toggleFav(f) {
@@ -393,6 +398,13 @@ export default function Nutri() {
     return () => window.removeEventListener("scroll", aoRolar);
   }, [tab]);
 
+  useEffect(() => {
+    (async () => {
+      try { const r = await window.storage.get("foto:perfil"); setFotoHeader(r ? r.value : null); }
+      catch { setFotoHeader(null); }
+    })();
+  }, []);
+
   if (!data) return <div className="nx"><style>{CSS}</style><div className="eb">Carregando…</div></div>;
   const shift = (k) => { const d = fromIso(day); d.setDate(d.getDate() + k); setDay(iso(d)); };
 
@@ -402,17 +414,25 @@ export default function Nutri() {
 
       {tab === "dia" && (
         <>
-          <div className="row" style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 999, background: "var(--coral-s)", color: "var(--coral-d)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15 }}>P</div>
-              <div>
-                <div style={{ fontSize: 17, fontWeight: 700 }}>Olá, Pedro</div>
+          <div className="row" style={{ marginBottom: 14, position: "relative" }}>
+            <button onClick={() => setUserMenu(!userMenu)} style={{ display: "flex", alignItems: "center", gap: 10, background: "transparent", padding: 0 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 999, background: "var(--coral-s)", color: "var(--coral-d)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, overflow: "hidden", flex: "0 0 auto" }}>
+                {fotoHeader ? <img src={fotoHeader} alt="Pedro" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "P"}
+              </div>
+              <div style={{ textAlign: "left" }}>
+                <div style={{ fontSize: 17, fontWeight: 700 }}>Pedro</div>
                 <div className="eb">{label(day)}</div>
               </div>
-            </div>
+            </button>
+            {userMenu && (
+              <div className="menu" style={{ top: "100%", left: 0, right: "auto" }} onMouseLeave={() => setUserMenu(false)}>
+                <button onClick={() => { setUserMenu(false); setTab("perfil"); }}>Ver perfil</button>
+                <button style={{ color: "var(--coral-d)" }} onClick={() => { setUserMenu(false); supabase.auth.signOut(); }}>Sair</button>
+              </div>
+            )}
             <div style={{ display: "flex", gap: 6 }}>
               <button className="ghost" style={{ padding: "8px 11px" }} onClick={() => setModeloOpen(true)}>
-                {cfg.refeicoesModelos.find((r) => r.id === modeloHojeId)?.nome || "Refeição"}
+                {cfg.refeicoesModelos.find((r) => r.id === modeloHojeId)?.nome || "Dieta"}
               </button>
               <button className="ghost" style={{ padding: "8px 11px" }} onClick={() => shift(-1)} aria-label="Dia anterior">←</button>
               <button className="ghost" style={{ padding: "8px 11px" }} onClick={() => shift(1)} aria-label="Próximo dia">→</button>
@@ -432,7 +452,14 @@ export default function Nutri() {
             pesos={data.pesos || {}} day={day}
             onSetPeso={(kg) => persist({ ...data, pesos: { ...(data.pesos || {}), [day]: kg } })}
             medLista={cfg.medicamentos} medMarcados={dia.medicamentos || []} medHistorico={data.medicamentoHistorico || {}}
-            onToggleMed={(s) => setDia({ medicamentos: (dia.medicamentos || []).includes(s) ? dia.medicamentos.filter((z) => z !== s) : [...(dia.medicamentos || []), s] })}
+            onToggleMed={(m) => {
+              const jaMarcado = (dia.medicamentos || []).includes(m.nome);
+              const novoMarcados = jaMarcado ? dia.medicamentos.filter((z) => z !== m.nome) : [...(dia.medicamentos || []), m.nome];
+              const novoDia = { ...dia, medicamentos: novoMarcados };
+              const recalcular = !jaMarcado && m.excecao === "recalcular" && !suppleDue(m, day);
+              const novoConfig = recalcular ? { ...cfg, medicamentos: cfg.medicamentos.map((x) => (x.id === m.id ? { ...x, ancora: day } : x)) } : cfg;
+              persist({ ...data, config: novoConfig, days: { ...data.days, [day]: novoDia } });
+            }}
             suppLista={cfg.supps} suppMarcados={dia.supps || []}
             onToggleSupp={(s) => setDia({ supps: (dia.supps || []).includes(s) ? dia.supps.filter((z) => z !== s) : [...(dia.supps || []), s] })}
             marcLista={cfg.marcadores} marcValores={dia.marcadores || {}}
@@ -441,6 +468,9 @@ export default function Nutri() {
           />
 
           <LinhaMacros tot={tot} cfg={metaHoje} />
+
+          <CardAgua ml={dia.agua || 0} meta={refModeloPadrao.metaAgua || 2500}
+            onAlterar={(delta) => setDia({ agua: Math.max(0, (dia.agua || 0) + delta) })} />
 
           {dia.meals.map((m) => (
             <MealCard
@@ -500,7 +530,7 @@ export default function Nutri() {
       {modeloOpen && (
         <div className="sheet">
           <div className="row" style={{ marginBottom: 16 }}>
-            <span style={{ fontSize: 17, fontWeight: 700 }}>Refeição de hoje</span>
+            <span style={{ fontSize: 17, fontWeight: 700 }}>Dieta de hoje</span>
             <button className="ghost" onClick={() => setModeloOpen(false)}>fechar</button>
           </div>
           <div className="eb" style={{ marginBottom: 9, fontWeight: 700 }}>Escolha o modelo para {label(day)}</div>
@@ -518,7 +548,7 @@ export default function Nutri() {
             ))}
           </div>
           <div className="eb" style={{ lineHeight: 1.6 }}>
-            Trocar aqui vale só para {label(day).toLowerCase()} e reinicia as refeições já lançadas nele. O modelo marcado "padrão" é o que abre em dias novos. Para criar, renomear ou editar modelos, vá em Ajustes.
+            Trocar aqui vale só para {label(day).toLowerCase()} e reinicia as dietas já lançadas nele. O modelo marcado "padrão" é o que abre em dias novos. Para criar, renomear ou editar modelos, vá em Ajustes.
           </div>
         </div>
       )}
@@ -568,7 +598,7 @@ export default function Nutri() {
         <FavoritarRefeicaoPanel meal={favoritarMeal} onClose={() => setFavoritarMeal(null)}
           onSalvar={(nome) => {
             persist({ ...data, refeicoesFavoritas: [{ id: uid(), nome, items: favoritarMeal.items.map((it) => ({ ...it })) }, ...(data.refeicoesFavoritas || [])] });
-            flash(`"${nome}" salva nas refeições favoritas`);
+            flash(`"${nome}" salva nas dietas favoritas`);
             setFavoritarMeal(null);
           }} />
       )}
@@ -707,16 +737,33 @@ function PesoConteudo({ pesos, day, onSet }) {
 }
 
 function ListaConteudo({ lista, marcados, historico, day, onToggle, comDose }) {
+  const hoje = lista.filter((m) => suppleDue(m, day));
+  const todosMarcados = hoje.length > 0 && hoje.every((m) => marcados.includes(m.nome));
+
+  function marcarTudo() {
+    hoje.forEach((m) => {
+      const marcado = marcados.includes(m.nome);
+      if (todosMarcados && marcado) onToggle(comDose ? m : m.nome);
+      if (!todosMarcados && !marcado) onToggle(comDose ? m : m.nome);
+    });
+  }
+
   return (
     <div>
       {lista.length === 0 && <div className="eb" style={{ padding: "6px 0" }}>Nada cadastrado. Adicione em Ajustes.</div>}
+      {hoje.length > 1 && (
+        <button className="ghost" style={{ width: "100%", marginBottom: 9 }} onClick={marcarTudo}>
+          {todosMarcados ? "desmarcar tudo" : "marcar tudo"}
+        </button>
+      )}
       {lista.map((m, i) => {
         const due = suppleDue(m, day);
         const dose = comDose ? doseNaData((historico || {})[m.id], day) : null;
+        const clicavel = comDose ? m.ancora : due;
         return (
           <div key={m.id || m.nome + i} style={{ padding: "8px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
-            <button onClick={() => due && onToggle(m.nome)} style={{ display: "flex", alignItems: "center", gap: 9, background: "transparent", padding: 0, width: "100%", textAlign: "left", opacity: due ? 1 : .45 }}>
-              <span className="box" data-on={due && marcados.includes(m.nome) ? "1" : "0"}>{due && marcados.includes(m.nome) ? "✓" : ""}</span>
+            <button onClick={() => clicavel && onToggle(comDose ? m : m.nome)} style={{ display: "flex", alignItems: "center", gap: 9, background: "transparent", padding: 0, width: "100%", textAlign: "left", opacity: clicavel ? 1 : .45 }}>
+              <span className="box" data-on={marcados.includes(m.nome) ? "1" : "0"}>{marcados.includes(m.nome) ? "✓" : ""}</span>
               <span style={{ fontSize: 13.5, fontWeight: marcados.includes(m.nome) ? 600 : 400, color: marcados.includes(m.nome) ? "var(--ink)" : "var(--ink2)", flex: 1 }}>
                 {m.nome}{dose ? <span style={{ color: "var(--ink2)", fontWeight: 400 }}> · {dose.dose}{dose.unidade}{dose.horario ? ` · ${dose.horario}` : ""}</span> : null}
               </span>
@@ -729,7 +776,9 @@ function ListaConteudo({ lista, marcados, historico, day, onToggle, comDose }) {
           </div>
         );
       })}
-      <div className="eb" style={{ marginTop: 9, lineHeight: 1.5 }}>Para adicionar ou mudar a periodicidade, vá em Ajustes.</div>
+      <div className="eb" style={{ marginTop: 9, lineHeight: 1.5 }}>
+        {comDose ? "Fora do dia previsto, ainda dá pra marcar manualmente — a regra de exceção (Ajustes) decide se isso muda os próximos dias." : "Para adicionar ou mudar a periodicidade, vá em Ajustes."}
+      </div>
     </div>
   );
 }
@@ -836,18 +885,29 @@ function MedicamentosStrip({ lista, historico, onLista, onDose }) {
               <div key={m.id} style={{ padding: "9px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
                 {edit ? (
                   <div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 7 }}>
-                      <input value={m.nome} style={{ flex: 1, padding: "7px 9px", fontSize: 13 }}
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+                      <input value={m.nome} style={{ flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 600 }}
                         onChange={(e) => onLista(lista.map((z, k) => (k === i ? { ...z, nome: e.target.value } : z)))} />
                       <button className="mini" onClick={() => onLista(lista.filter((_, k) => k !== i))}>✕</button>
                     </div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span className="eb" style={{ whiteSpace: "nowrap" }}>a cada</span>
-                      <input className="num" inputMode="numeric" value={m.cadaDias || 1} style={{ width: 44, padding: "7px 4px", fontSize: 13, textAlign: "center" }}
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 9, flexWrap: "wrap" }}>
+                      <span className="eb" style={{ whiteSpace: "nowrap", fontWeight: 700 }}>a cada</span>
+                      <input className="num" inputMode="numeric" value={m.cadaDias || 1} style={{ width: 48, padding: "8px 4px", fontSize: 14, fontWeight: 700, textAlign: "center" }}
                         onChange={(e) => onLista(lista.map((z, k) => (k === i ? { ...z, cadaDias: Math.max(1, n0(e.target.value.replace(/\D/g, "")) || 1) } : z)))} />
-                      <span className="eb">dias, a partir de</span>
-                      <input type="date" value={m.ancora || hoje} style={{ padding: "6px 7px", fontSize: 12, flex: 1 }}
+                      <span className="eb" style={{ fontWeight: 700 }}>dias, a partir de</span>
+                      <input type="date" value={m.ancora || ""} style={{ padding: "7px 8px", fontSize: 13, flex: 1, minWidth: 130 }}
                         onChange={(e) => onLista(lista.map((z, k) => (k === i ? { ...z, ancora: e.target.value } : z)))} />
+                      <button className="chip" data-on={m.ancora ? "0" : "1"}
+                        onClick={() => onLista(lista.map((z, k) => (k === i ? { ...z, ancora: z.ancora ? "" : hoje } : z)))}>
+                        {m.ancora ? "pausar" : "inativo — reativar"}
+                      </button>
+                    </div>
+                    <div className="eb" style={{ marginBottom: 5, fontWeight: 700 }}>se tomar fora do dia previsto</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="chip" data-on={m.excecao === "recalcular" ? "1" : "0"}
+                        onClick={() => onLista(lista.map((z, k) => (k === i ? { ...z, excecao: "recalcular" } : z)))}>recalcular ciclo</button>
+                      <button className="chip" data-on={(m.excecao || "manter") === "manter" ? "1" : "0"}
+                        onClick={() => onLista(lista.map((z, k) => (k === i ? { ...z, excecao: "manter" } : z)))}>manter cronograma</button>
                     </div>
                   </div>
                 ) : (
@@ -855,6 +915,7 @@ function MedicamentosStrip({ lista, historico, onLista, onDose }) {
                     <div className="row" style={{ marginBottom: 6 }}>
                       <span style={{ fontSize: 13.5, fontWeight: 600 }}>{m.nome}</span>
                       <div style={{ display: "flex", gap: 5 }}>
+                        {!m.ancora && <span className="pill" style={{ background: "var(--coral-s)", color: "var(--coral-d)" }}>inativo</span>}
                         {(m.cadaDias || 1) > 1 && <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>a cada {m.cadaDias}d</span>}
                         {atual ? (
                           <span className="pill" style={{ background: "var(--violet-s)", color: "var(--violet-d)" }}>{atual.dose} {atual.unidade}{atual.horario ? ` · ${atual.horario}` : ""}</span>
@@ -884,7 +945,7 @@ function MedicamentosStrip({ lista, historico, onLista, onDose }) {
           })}
           <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
             <button className="ghost" style={{ flex: 1 }} onClick={() => setEdit(!edit)}>{edit ? "concluir" : "editar lista"}</button>
-            {edit && <button className="ghost" onClick={() => onLista([...lista, { id: uid(), nome: "Novo medicamento", cadaDias: 1, ancora: hoje }])}>+ item</button>}
+            {edit && <button className="ghost" onClick={() => onLista([...lista, { id: uid(), nome: "Novo medicamento", cadaDias: 1, ancora: hoje, excecao: "manter" }])}>+ item</button>}
           </div>
           {lista.length === 0 && !edit && <div className="eb" style={{ padding: "8px 0" }}>Toque em "editar lista" para adicionar um medicamento.</div>}
         </div>
@@ -1020,6 +1081,29 @@ function LinhaMacros({ tot, cfg }) {
   );
 }
 
+/* ---------- hidratação ---------- */
+function CardAgua({ ml, meta, onAlterar }) {
+  const pct = Math.min(100, (ml / (meta || 1)) * 100);
+  return (
+    <div className="card" style={{ padding: "11px 13px", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 17 }}>💧</span>
+      <div style={{ flex: 1 }}>
+        <div className="row" style={{ marginBottom: 5 }}>
+          <span className="eb" style={{ fontWeight: 700 }}>Água</span>
+          <span className="num" style={{ fontSize: 12, fontWeight: 700 }}>
+            {(ml / 1000).toFixed(1)}L <span style={{ color: "var(--ink2)", fontWeight: 500 }}>/ {(meta / 1000).toFixed(1)}L</span>
+          </span>
+        </div>
+        <div className="track" style={{ height: 6 }}>
+          <div className="fill" style={{ width: `${pct}%`, background: "var(--violet)" }} />
+        </div>
+      </div>
+      <button className="mini" style={{ fontSize: 16, padding: "2px 8px" }} onClick={() => onAlterar(-50)} aria-label="Menos 50ml">−</button>
+      <button className="mini" style={{ fontSize: 16, padding: "2px 8px" }} onClick={() => onAlterar(50)} aria-label="Mais 50ml">+</button>
+    </div>
+  );
+}
+
 /* ---------- refeição ---------- */
 function MealCard({ meal, clip, onAdd, onVoz, onSugerir, onPatch, onCopy, onPaste, onCopiarFuturo, onFavoritar, onUsarFavorita, onClear, onDelete }) {
   const [aberto, setAberto] = useState(false);
@@ -1061,13 +1145,13 @@ function MealCard({ meal, clip, onAdd, onVoz, onSugerir, onPatch, onCopy, onPast
         {menu && (
           <div className="menu" onMouseLeave={() => setMenu(false)}>
             <button onClick={() => { setMetas(true); setMenu(false); }}>Editar metas</button>
-            <button onClick={() => { onCopy(); setMenu(false); }}>Copiar refeição</button>
+            <button onClick={() => { onCopy(); setMenu(false); }}>Copiar dieta</button>
             <button style={{ opacity: clip ? 1 : .35 }} onClick={() => { if (clip) { onPaste(); setMenu(false); } }}>Colar {clip ? `“${clip.nome}”` : "—"}</button>
             <button onClick={() => { onCopiarFuturo(); setMenu(false); }}>Copiar para os próximos dias…</button>
-            <button style={{ opacity: (meal.items || []).length ? 1 : .35 }} onClick={() => { if ((meal.items || []).length) { onFavoritar(); setMenu(false); } }}>Favoritar esta refeição</button>
-            <button onClick={() => { onUsarFavorita(); setMenu(false); }}>Usar refeição favorita</button>
+            <button style={{ opacity: (meal.items || []).length ? 1 : .35 }} onClick={() => { if ((meal.items || []).length) { onFavoritar(); setMenu(false); } }}>Favoritar esta dieta</button>
+            <button onClick={() => { onUsarFavorita(); setMenu(false); }}>Usar dieta favorita</button>
             <button onClick={() => { onClear(); setMenu(false); }}>Limpar itens</button>
-            <button style={{ color: "var(--coral-d)" }} onClick={() => { onDelete(); setMenu(false); }}>Excluir refeição</button>
+            <button style={{ color: "var(--coral-d)" }} onClick={() => { onDelete(); setMenu(false); }}>Excluir dieta</button>
           </div>
         )}
       </div>
@@ -1114,7 +1198,7 @@ function MealCard({ meal, clip, onAdd, onVoz, onSugerir, onPatch, onCopy, onPast
       <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
         <button className="soft" style={{ flex: 1 }} onClick={onVoz}>🎙 Falar</button>
         <button className="ghost" style={{ flex: 1 }} onClick={onAdd}>+ Alimento</button>
-        <button className="ghost" onClick={onUsarFavorita} aria-label="Usar refeição favorita">★</button>
+        <button className="ghost" onClick={onUsarFavorita} aria-label="Usar dieta favorita">★</button>
         <button className="ghost" style={{ background: "var(--violet-s)", color: "var(--violet-d)", borderColor: "var(--violet-s)" }} onClick={onSugerir}>✨ Meta</button>
       </div>
     </div>
@@ -1130,7 +1214,7 @@ function CopiarFuturoPanel({ meal, onClose, onConfirmar }) {
         <button className="ghost" onClick={onClose}>fechar</button>
       </div>
       <div className="eb" style={{ marginBottom: 10, lineHeight: 1.6 }}>
-        Aplica os itens de hoje nessa mesma refeição (por nome) nos próximos dias. Se um dia já tiver itens lançados ali, eles são substituídos.
+        Aplica os itens de hoje nessa mesma dieta (por nome) nos próximos dias. Se um dia já tiver itens lançados ali, eles são substituídos.
       </div>
       <div className="eb" style={{ marginBottom: 7 }}>Quantos dias à frente</div>
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
@@ -1151,10 +1235,10 @@ function FavoritarRefeicaoPanel({ meal, onClose, onSalvar }) {
   return (
     <div className="sheet">
       <div className="row" style={{ marginBottom: 16 }}>
-        <span style={{ fontSize: 17, fontWeight: 700 }}>Favoritar refeição</span>
+        <span style={{ fontSize: 17, fontWeight: 700 }}>Favoritar dieta</span>
         <button className="ghost" onClick={onClose}>fechar</button>
       </div>
-      <div className="eb" style={{ marginBottom: 5 }}>Nome da refeição favorita</div>
+      <div className="eb" style={{ marginBottom: 5 }}>Nome da dieta favorita</div>
       <input value={nome} onChange={(e) => setNome(e.target.value)} style={{ marginBottom: 14, fontSize: 15 }} />
       <div className="card" style={{ padding: "4px 15px 10px", marginBottom: 16 }}>
         <div className="eb" style={{ padding: "10px 0 4px", fontWeight: 700 }}>{meal.items.length} itens · {fmt(t.kcal)} kcal</div>
@@ -1168,13 +1252,15 @@ function FavoritarRefeicaoPanel({ meal, onClose, onSalvar }) {
 }
 
 function UsarFavoritaPanel({ favoritas, onClose, onUsar, onExcluir }) {
+  const [confirmando, setConfirmando] = useState(null);
+
   return (
     <div className="sheet">
       <div className="row" style={{ marginBottom: 16 }}>
-        <span style={{ fontSize: 17, fontWeight: 700 }}>Refeições favoritas</span>
+        <span style={{ fontSize: 17, fontWeight: 700 }}>Dietas favoritas</span>
         <button className="ghost" onClick={onClose}>fechar</button>
       </div>
-      {favoritas.length === 0 && <div className="eb" style={{ padding: "6px 0", lineHeight: 1.6 }}>Nenhuma ainda. Dentro de uma refeição, use "Favoritar esta refeição" para salvar um conjunto de alimentos — como um pré-treino que você sempre repete.</div>}
+      {favoritas.length === 0 && <div className="eb" style={{ padding: "6px 0", lineHeight: 1.6 }}>Nenhuma ainda. Dentro de uma dieta, use "Favoritar esta dieta" para salvar um conjunto de alimentos — como um pré-treino que você sempre repete.</div>}
       <div className="card" style={{ padding: "4px 15px 8px" }}>
         {favoritas.map((f, i) => {
           const t = somar(f.items);
@@ -1185,7 +1271,14 @@ function UsarFavoritaPanel({ favoritas, onClose, onUsar, onExcluir }) {
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{f.nome}</div>
                   <div className="eb" style={{ marginTop: 3 }}>{f.items.length} itens · {fmt(t.kcal)} kcal</div>
                 </button>
-                <button className="mini" style={{ color: "var(--coral-d)" }} onClick={() => onExcluir(f.id)}>excluir</button>
+                {confirmando === f.id ? (
+                  <div style={{ display: "flex", gap: 5 }}>
+                    <button className="mini" style={{ color: "var(--coral-d)", fontWeight: 700 }} onClick={() => { onExcluir(f.id); setConfirmando(null); }}>confirmar</button>
+                    <button className="mini" onClick={() => setConfirmando(null)}>cancelar</button>
+                  </div>
+                ) : (
+                  <button className="mini" style={{ color: "var(--coral-d)" }} onClick={() => setConfirmando(f.id)}>excluir</button>
+                )}
               </div>
             </div>
           );
@@ -1328,7 +1421,7 @@ Responda só JSON, sem markdown:
           <button className="ghost" style={{ width: "100%", marginTop: 10 }}
             disabled={!alvoRasc.kcal && !alvoRasc.prot && !alvoRasc.carb && !alvoRasc.gord}
             onClick={() => onSalvarAlvo({ kcal: n0(alvoRasc.kcal), prot: n0(alvoRasc.prot), carb: n0(alvoRasc.carb), gord: n0(alvoRasc.gord) })}>
-            Salvar como meta fixa desta refeição
+            Salvar como meta fixa desta dieta
           </button>
         </div>
       )}
@@ -1344,14 +1437,14 @@ Responda só JSON, sem markdown:
           ))}
         </div>
         {historico.length > 0 && (
-          <div className="eb" style={{ marginTop: 11 }}>Baseado em {historico.length} alimentos que você já usou nesta refeição</div>
+          <div className="eb" style={{ marginTop: 11 }}>Baseado em {historico.length} alimentos que você já usou nesta dieta</div>
         )}
       </div>
 
       {erro && <div className="card" style={{ padding: 13, marginBottom: 12, fontSize: 13, color: "var(--coral-d)", background: "var(--coral-s)" }}>{erro}</div>}
 
       {!res && (
-        <button className="cta" onClick={sugerir} disabled={proc}>{proc ? "Montando…" : "✨ Sugerir refeição"}</button>
+        <button className="cta" onClick={sugerir} disabled={proc}>{proc ? "Montando…" : "✨ Sugerir dieta"}</button>
       )}
 
       {res && (
@@ -1478,7 +1571,7 @@ Só JSON, sem markdown:
             placeholder="No almoço, 150 gramas de arroz, uma concha de feijão e um filé de frango grelhado"
             style={{ marginBottom: 9, fontSize: 15, lineHeight: 1.5 }} />
           <div className="eb" style={{ marginBottom: 14, lineHeight: 1.5 }}>
-            Diga o nome da refeição no começo e ela é escolhida sozinha. O microfone do teclado também funciona neste campo.
+            Diga o nome da dieta no começo e ela é escolhida sozinha. O microfone do teclado também funciona neste campo.
           </div>
           {erro && <div className="card" style={{ padding: 13, marginBottom: 12, fontSize: 13, color: "var(--coral-d)", background: "var(--coral-s)" }}>{erro}</div>}
           <button className="cta" onClick={processar} disabled={proc || !txt.trim()}>{proc ? "Calculando…" : "Calcular"}</button>
@@ -1643,7 +1736,7 @@ function FoodSheet({ data, meal, meals, onClose, onAdd, onFav, onCustom }) {
 
       {!meal && meals && meals.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <div className="eb" style={{ marginBottom: 7, fontWeight: 700 }}>Em qual refeição?</div>
+          <div className="eb" style={{ marginBottom: 7, fontWeight: 700 }}>Em qual dieta?</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {meals.map((m) => (
               <button key={m.id} className="chip" data-on={mealAlvoId === m.id ? "1" : "0"} onClick={() => setMealAlvoId(m.id)}>{m.nome}</button>
@@ -1681,7 +1774,7 @@ function FoodSheet({ data, meal, meals, onClose, onAdd, onFav, onCustom }) {
             <Pills m={preview} />
           </div>
           {precisaEscolherRefeicao ? (
-            <div className="eb" style={{ textAlign: "center", padding: "8px 0", color: "var(--coral-d)" }}>Escolha a refeição acima para adicionar</div>
+            <div className="eb" style={{ textAlign: "center", padding: "8px 0", color: "var(--coral-d)" }}>Escolha a dieta acima para adicionar</div>
           ) : (
             <button className="cta" onClick={() => onAdd([{ ...sel, id: uid(), g: Number(g) || 0 }], mealAlvoId || (meal && meal.id))}>
               Adicionar em {mealAlvo ? mealAlvo.nome : ""}
@@ -2826,6 +2919,11 @@ function Perfil({ data, cfg, refModeloPadrao, persist }) {
         )}
       </div>
 
+      <button className="ghost" style={{ width: "100%", padding: 13, marginTop: 11, color: "var(--coral-d)", borderColor: "var(--coral-s)", fontWeight: 700 }}
+        onClick={() => supabase.auth.signOut()}>
+        Sair da conta
+      </button>
+
       {verFotos && (
         <VisualizarFotos data={verFotos} angulos={(data.fotosIndex || {})[verFotos] || []} onClose={() => setVerFotos(null)}
           onDeletar={async (angulo) => {
@@ -2863,9 +2961,9 @@ function Ajustes({ data, cfg, persist, flash }) {
 
       <div className="card" style={{ padding: "6px 15px 15px", marginBottom: 11 }}>
         <div className="row" style={{ padding: "12px 0 8px" }}>
-          <span className="eb" style={{ fontWeight: 700 }}>Meus modelos de refeição</span>
+          <span className="eb" style={{ fontWeight: 700 }}>Meus modelos de dieta</span>
           <button className="mini" style={{ color: "var(--coral-d)" }}
-            onClick={() => setRefs([...cfg.refeicoesModelos, { id: uid(), nome: "Novo modelo", padrao: false, meals: MEALS_PADRAO.map((m) => ({ ...m, id: uid(), alvo: null })) }])}>
+            onClick={() => setRefs([...cfg.refeicoesModelos, { id: uid(), nome: "Novo modelo", padrao: false, metaAgua: 2500, meals: MEALS_PADRAO.map((m) => ({ ...m, id: uid(), alvo: null })) }])}>
             + novo
           </button>
         </div>
@@ -2879,10 +2977,11 @@ function Ajustes({ data, cfg, persist, flash }) {
               setRefs(restante);
             }}
             podeExcluir={cfg.refeicoesModelos.length > 1}
+            onMetaAgua={(ml) => setRefs(cfg.refeicoesModelos.map((z, k) => (k === ri ? { ...z, metaAgua: ml } : z)))}
             onMeals={(meals) => setRefs(cfg.refeicoesModelos.map((z, k) => (k === ri ? { ...z, meals } : z)))} />
         ))}
         <div className="eb" style={{ marginTop: 10, lineHeight: 1.5 }}>
-          Cada modelo já traz nome, horário e as metas de macro de cada refeição. Toque em "adotar como padrão" para ele abrir sozinho em dias novos; no Diário dá para trocar só para o dia atual.
+          Cada modelo já traz nome, horário e as metas de macro de cada dieta. Toque em "adotar como padrão" para ele abrir sozinho em dias novos; no Diário dá para trocar só para o dia atual.
         </div>
       </div>
 
@@ -2909,16 +3008,24 @@ function Ajustes({ data, cfg, persist, flash }) {
           </button>
         </div>
         {cfg.supps.map((s, i) => (
-          <div key={s.id} className="item" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <input value={s.nome} style={{ flex: 1, padding: "8px 10px", fontSize: 13 }}
-              onChange={(e) => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, nome: e.target.value } : z)) })} />
-            <span className="eb" style={{ whiteSpace: "nowrap" }}>a cada</span>
-            <input className="num" inputMode="numeric" value={s.cadaDias || 1} style={{ width: 44, padding: "8px 4px", fontSize: 13, textAlign: "center" }}
-              onChange={(e) => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, cadaDias: Math.max(1, n0(e.target.value.replace(/\D/g, "")) || 1) } : z)) })} />
-            <span className="eb">dias</span>
-            <input type="date" value={s.ancora || iso(new Date())} style={{ padding: "7px 6px", fontSize: 11.5, width: 118 }}
-              onChange={(e) => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, ancora: e.target.value } : z)) })} />
-            <button className="mini" onClick={() => set({ supps: cfg.supps.filter((_, k) => k !== i) })}>✕</button>
+          <div key={s.id} className="item">
+            <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+              <input value={s.nome} style={{ flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 600 }}
+                onChange={(e) => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, nome: e.target.value } : z)) })} />
+              <button className="mini" onClick={() => set({ supps: cfg.supps.filter((_, k) => k !== i) })}>✕</button>
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <span className="eb" style={{ whiteSpace: "nowrap", fontWeight: 700 }}>a cada</span>
+              <input className="num" inputMode="numeric" value={s.cadaDias || 1} style={{ width: 48, padding: "8px 4px", fontSize: 14, fontWeight: 700, textAlign: "center" }}
+                onChange={(e) => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, cadaDias: Math.max(1, n0(e.target.value.replace(/\D/g, "")) || 1) } : z)) })} />
+              <span className="eb" style={{ fontWeight: 700 }}>dias, a partir de</span>
+              <input type="date" value={s.ancora || ""} style={{ padding: "7px 8px", fontSize: 13, flex: 1, minWidth: 130 }}
+                onChange={(e) => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, ancora: e.target.value } : z)) })} />
+              <button className="chip" data-on={s.ancora ? "0" : "1"}
+                onClick={() => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, ancora: z.ancora ? "" : iso(new Date()) } : z)) })}>
+                {s.ancora ? "pausar" : "inativo — reativar"}
+              </button>
+            </div>
           </div>
         ))}
         <div className="eb" style={{ marginTop: 10, lineHeight: 1.5 }}>A data ao lado é quando a periodicidade começa a contar — mude-a se precisar recalcular os dias certos.</div>
@@ -2932,7 +3039,7 @@ function Ajustes({ data, cfg, persist, flash }) {
   );
 }
 
-function ModeloRefeicaoRow({ r, onRenomear, onPadrao, onExcluir, podeExcluir, onMeals }) {
+function ModeloRefeicaoRow({ r, onRenomear, onPadrao, onExcluir, podeExcluir, onMeals, onMetaAgua }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="item">
@@ -2944,6 +3051,13 @@ function ModeloRefeicaoRow({ r, onRenomear, onPadrao, onExcluir, podeExcluir, on
       </div>
       {open && (
         <div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 11 }}>
+            <span className="eb" style={{ whiteSpace: "nowrap" }}>💧 meta de água</span>
+            <input className="num" inputMode="numeric" value={r.metaAgua || ""} placeholder="2500"
+              style={{ width: 80, padding: "6px 8px", fontSize: 12.5, textAlign: "center" }}
+              onChange={(e) => onMetaAgua(n0(e.target.value.replace(/\D/g, "")))} />
+            <span className="eb">ml/dia</span>
+          </div>
           {r.meals.map((m, i) => (
             <div key={m.id} style={{ padding: "8px 0", borderTop: "1px solid var(--rule)" }}>
               <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 7 }}>
@@ -2964,7 +3078,7 @@ function ModeloRefeicaoRow({ r, onRenomear, onPadrao, onExcluir, podeExcluir, on
             </div>
           ))}
           <button className="ghost" style={{ width: "100%", marginTop: 9 }}
-            onClick={() => onMeals([...r.meals, { id: uid(), nome: "Nova refeição", hora: "", alvo: null }])}>+ refeição</button>
+            onClick={() => onMeals([...r.meals, { id: uid(), nome: "Nova dieta", hora: "", alvo: null }])}>+ dieta</button>
         </div>
       )}
     </div>
