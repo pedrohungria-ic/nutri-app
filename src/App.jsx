@@ -239,7 +239,12 @@ border-radius:999px;box-shadow:0 4px 14px rgba(245,56,93,.32);font-weight:600;fo
 width:56px;height:56px;border-radius:999px;background:var(--coral);color:#fff;font-size:26px;line-height:1;
 display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(245,56,93,.4)}
 .nx .fab:active{transform:scale(.94)}
-@media (min-width:540px){.nx .fab{right:calc(50% - 240px + 20px)}}
+.nx .fab[data-on="1"]{background:var(--ink)}
+.nx .fabMenu{position:fixed;right:20px;bottom:calc(146px + env(safe-area-inset-bottom));z-index:46;display:flex;flex-direction:column;gap:9px;align-items:flex-end}
+@media (min-width:540px){
+  .nx .fab{right:calc(50% - 240px + 20px)}
+  .nx .fabMenu{right:calc(50% - 240px + 20px)}
+}
 
 .nx .strip{background:var(--card);border-radius:14px;padding:10px 13px;margin-bottom:12px;box-shadow:0 1px 2px rgba(27,37,89,.05)}
 .nx .stripBtn{width:100%;background:transparent;padding:0;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -296,6 +301,7 @@ export default function Nutri() {
   const [day, setDay] = useState(iso(new Date()));
   const [sheet, setSheet] = useState(null);
   const [vozOpen, setVozOpen] = useState(false);
+  const [fabMenu, setFabMenu] = useState(false);
   const [sugestao, setSugestao] = useState(null);
   const [modeloOpen, setModeloOpen] = useState(false);
   const [copiarFuturoMeal, setCopiarFuturoMeal] = useState(null);
@@ -412,11 +418,6 @@ export default function Nutri() {
 
           <Resumo tot={tot} cfg={metaHoje} />
 
-          <button className="hero" onClick={() => setVozOpen(true)}>
-            <span className="heroIcon">🎙</span>
-            <span style={{ textAlign: "left" }}>Falar o que comi<br /><span style={{ fontSize: 12, opacity: .85, fontWeight: 500 }}>diga a refeição e as quantidades</span></span>
-          </button>
-
           {dia.meals.map((m) => (
             <MealCard
               key={m.id} meal={m} clip={clip}
@@ -438,7 +439,21 @@ export default function Nutri() {
             onValor={(id, v) => setDia({ marcadores: { ...(dia.marcadores || {}), [id]: v } })}
             onLista={(l) => persist({ ...data, config: { ...cfg, marcadores: l } })} />
 
-          <button className="fab" onClick={() => setSheet({ mealId: null })} aria-label="Adicionar alimento">+</button>
+          {fabMenu && (
+            <div className="fabMenu">
+              <button onClick={() => { setFabMenu(false); setVozOpen(true); }}
+                style={{ display: "flex", alignItems: "center", gap: 9, background: "var(--ink)", color: "#fff", borderRadius: 999, padding: "11px 18px 11px 14px", fontSize: 13.5, fontWeight: 600, boxShadow: "0 4px 14px rgba(27,37,89,.3)" }}>
+                <span style={{ fontSize: 17 }}>🎙</span> Falei o que comi
+              </button>
+              <button onClick={() => { setFabMenu(false); setSheet({ mealId: null }); }}
+                style={{ display: "flex", alignItems: "center", gap: 9, background: "#fff", color: "var(--ink)", borderRadius: 999, padding: "11px 18px 11px 14px", fontSize: 13.5, fontWeight: 600, boxShadow: "0 4px 14px rgba(27,37,89,.18)" }}>
+                <span style={{ fontSize: 17 }}>✏️</span> Adicionar manualmente
+              </button>
+            </div>
+          )}
+          <button className="fab" data-on={fabMenu ? "1" : "0"} onClick={() => setFabMenu(!fabMenu)} aria-label="Adicionar alimento">
+            {fabMenu ? "✕" : "+"}
+          </button>
         </>
       )}
 
