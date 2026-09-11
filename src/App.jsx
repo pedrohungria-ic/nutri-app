@@ -405,12 +405,12 @@ export default function Nutri() {
     })();
   }, []);
 
-  if (!data) return <div className="nx"><style>{CSS}</style><div className="eb">Carregando…</div></div>;
+  if (!data) return <div className="nx"><style>{CSS}</style><style>{CSS_STICKY}</style><div className="eb">Carregando…</div></div>;
   const shift = (k) => { const d = fromIso(day); d.setDate(d.getDate() + k); setDay(iso(d)); };
 
   return (
     <div className="nx">
-      <style>{CSS}</style>
+      <style>{CSS}</style><style>{CSS_STICKY}</style>
 
       {tab === "dia" && (
         <>
@@ -514,6 +514,7 @@ export default function Nutri() {
         onExamesCampos={(campos) => persist({ ...data, examesCampos: campos })}
         onSalvarExame={(dataChave, valores, campos) => persist({ ...data, examesCampos: campos, exames: { ...(data.exames || {}), [dataChave]: { ...(data.exames && data.exames[dataChave]), ...valores } } })}
         onExameContexto={(dataChave, ctx) => persist({ ...data, exameContexto: { ...(data.exameContexto || {}), [dataChave]: ctx } })}
+        onSetPesoData={(dt, kg) => persist({ ...data, pesos: { ...(data.pesos || {}), [dt]: kg } })}
         razoes={data.tendenciasRazoes || []}
         onRazoes={(l) => persist({ ...data, tendenciasRazoes: l })} />}
       {tab === "perfil" && <Perfil data={data} cfg={cfg} refModeloPadrao={refModeloPadrao} persist={persist} />}
@@ -975,6 +976,151 @@ function MedicamentosStrip({ lista, historico, onLista, onDose }) {
           <button className="cta" onClick={salvarDose} disabled={form.dose === ""}>Salvar</button>
         </div>
       )}
+    </div>
+  );
+}
+
+function categorizarExame(nome) {
+  const n = String(nome).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/\bast\b|\btgo\b|\balt\b|\btgp\b|gama.?glutamil|\bggt\b|bilirrubin|fosfatase alcalina|transaminase/.test(n)) return "Função Hepática";
+  if (/creatinin|ureia|clearance|\begfr\b|\btfg\b/.test(n)) return "Função Renal";
+  if (/testosteron|estradiol|\btsh\b|t4 livre|tiroxina|triiodotironina|\bt3\b|\blh\b|\bfsh\b|prolactina|dhea|\bshbg\b|\bdht\b|progesterona|paratormonio|\bpth\b/.test(n)) return "Painel Hormonal";
+  if (/glicose|hba1c|hemoglobina glicada|insulina|homa|colesterol|triglicerid|\bldl\b|\bhdl\b|\bvldl\b|apolipoprote/.test(n)) return "Perfil Metabólico";
+  if (/hemoglobina\b|hematocrit|leucocit|plaqueta|eritrocit|\bvcm\b|\bhcm\b|\bchcm\b|\brdw\b|neutrofilo|linfocito|monocito/.test(n)) return "Hemograma";
+  return "Outros";
+}
+
+const CSS_STICKY = `
+.nx .stickyTable{overflow-x:auto;border-radius:12px;background:var(--card);box-shadow:0 1px 2px rgba(27,37,89,.06)}
+.nx .stickyTable table{border-collapse:collapse;font-size:11.5px;white-space:nowrap;width:100%}
+.nx .stickyTable th,.nx .stickyTable td{padding:8px 11px;text-align:right;border-bottom:1px solid var(--rule)}
+.nx .stickyTable th:first-child,.nx .stickyTable td:first-child{position:sticky;left:0;background:var(--card);text-align:left;font-weight:600;z-index:2;box-shadow:2px 0 4px rgba(27,37,89,.06)}
+.nx .stickyTable thead th{background:var(--bg);font-weight:700;color:var(--ink2);font-size:10.5px}
+.nx .stickyTable thead th:first-child{z-index:3}
+.nx .stickyTable .grupo td{background:var(--bg);font-weight:700;color:var(--ink2);font-size:10px;text-transform:uppercase;letter-spacing:.04em;position:static;box-shadow:none}
+`;
+
+function SecaoPeso({ pesos, janela, onSetPesoData }) {
+  const [aberto, setAberto] = useState(false);
+  const [dt, setDt] = useState(iso(new Date()));
+  const [val, setVal] = useState("");
+
+  const datas = Object.keys(pesos).filter((d) => { const dd = diffDias(iso(new Date()), d); return dd >= 0 && dd < janela; }).sort();
+  const chartData = datas.map((d) => ({ data: label(d).slice(0, 6), kg: pesos[d] }));
+
+  function salvar() {
+    if (!val) return;
+    onSetPesoData(dt, Number(val));
+    setVal(""); setAberto(false);
+  }
+
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div className="row" style={{ marginBottom: 10 }}>
+        <span style={{ fontSize: 15, fontWeight: 800 }}>⚖️ Evolução do peso</span>
+        <button className="mini" style={{ color: "var(--coral-d)", fontWeight: 700 }} onClick={() => setAberto(!aberto)}>{aberto ? "cancelar" : "+ novo peso"}</button>
+      </div>
+
+      {aberto && (
+        <div className="card" style={{ padding: 13, marginBottom: 10 }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
+            <input type="date" value={dt} onChange={(e) => setDt(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+            <input className="num" inputMode="decimal" placeholder="kg" value={val}
+              onChange={(e) => setVal(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))} style={{ width: 90, textAlign: "center", fontWeight: 700 }} />
+          </div>
+          <button className="cta" onClick={salvar} disabled={!val}>Salvar</button>
+        </div>
+      )}
+
+      {chartData.length >= 2 && (
+        <div className="card" style={{ padding: 14, marginBottom: 10 }}>
+          <div style={{ width: "100%", height: 130 }}>
+            <ResponsiveContainer>
+              <LineChart data={chartData} margin={{ top: 4, right: 6, left: -22, bottom: 0 }}>
+                <CartesianGrid stroke="var(--rule)" vertical={false} />
+                <XAxis dataKey="data" tick={{ fontSize: 9.5, fill: "var(--ink2)" }} axisLine={{ stroke: "var(--rule)" }} tickLine={false} />
+                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 9.5, fill: "var(--ink2)" }} axisLine={false} tickLine={false} width={30} />
+                <Tooltip formatter={(v) => [`${n1(v)} kg`, "Peso"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Line type="monotone" dataKey="kg" stroke="var(--coral)" strokeWidth={2} dot={{ r: 2 }} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      <PesoHistorico pesos={pesos} janela={janela} />
+
+      {datas.length > 0 && (
+        <div className="card" style={{ padding: "4px 15px 8px", marginTop: 10 }}>
+          {datas.slice().reverse().map((d, i, arr) => {
+            const anterior = arr[i + 1];
+            const delta = anterior != null ? pesos[d] - pesos[anterior] : null;
+            return (
+              <div key={d} className="row" style={{ padding: "7px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
+                <span style={{ fontSize: 12.5 }}>{label(d)}</span>
+                <span className="num" style={{ fontSize: 12.5, fontWeight: 700 }}>
+                  {n1(pesos[d])} kg
+                  {delta != null && <span style={{ color: delta > 0 ? "var(--orange-d)" : delta < 0 ? "var(--lime-d)" : "var(--ink2)", marginLeft: 6 }}>{delta > 0 ? "+" : ""}{n1(delta)}</span>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MedicoesTabela({ medicoes, janela }) {
+  const datas = Object.keys(medicoes).filter((d) => { const dd = diffDias(iso(new Date()), d); return dd >= 0 && dd < janela; }).sort();
+  const campos = MEDIDAS_CAMPOS.filter((c) => datas.some((d) => medicoes[d][c.key] != null));
+  if (!datas.length) return <div className="eb" style={{ padding: "10px 0" }}>Nenhuma medição no período.</div>;
+  return (
+    <div className="stickyTable">
+      <table>
+        <thead><tr><th>Medida</th>{datas.map((d) => <th key={d}>{label(d).slice(0, 6)}</th>)}</tr></thead>
+        <tbody>
+          {campos.map((c) => (
+            <tr key={c.key}>
+              <td>{c.lb}</td>
+              {datas.map((d) => <td key={d} className="num">{medicoes[d][c.key] != null ? n1(medicoes[d][c.key]) : "—"}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ExamesTabela({ campos, exames, janela }) {
+  const datas = Object.keys(exames).filter((d) => { const dd = diffDias(iso(new Date()), d); return dd >= 0 && dd < janela; }).sort();
+  if (!datas.length || !campos.length) return <div className="eb" style={{ padding: "10px 0" }}>Nenhum exame no período.</div>;
+  const grupos = {};
+  campos.forEach((c) => {
+    if (!datas.some((d) => exames[d][c.key] != null)) return;
+    const cat = categorizarExame(c.nome);
+    (grupos[cat] = grupos[cat] || []).push(c);
+  });
+  const ordem = ["Função Hepática", "Função Renal", "Painel Hormonal", "Perfil Metabólico", "Hemograma", "Outros"].filter((g) => grupos[g]);
+  if (!ordem.length) return <div className="eb" style={{ padding: "10px 0" }}>Nenhum exame no período.</div>;
+  return (
+    <div className="stickyTable">
+      <table>
+        <thead><tr><th>Índice</th>{datas.map((d) => <th key={d}>{label(d).slice(0, 6)}</th>)}</tr></thead>
+        <tbody>
+          {ordem.map((g) => (
+            <React.Fragment key={g}>
+              <tr className="grupo"><td colSpan={datas.length + 1}>{g}</td></tr>
+              {grupos[g].map((c) => (
+                <tr key={c.key}>
+                  <td>{c.nome}</td>
+                  {datas.map((d) => <td key={d} className="num">{exames[d][c.key] != null ? n1(exames[d][c.key]) : "—"}</td>)}
+                </tr>
+              ))}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1886,9 +2032,13 @@ const SERIES_TENDENCIA = [
   { key: "pctMeta", nome: "% da meta (kcal)", unidade: "%", cor: "var(--violet-d)" },
 ];
 
-function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex, onExamesCampos, onSalvarExame, onExameContexto, razoes, onRazoes }) {
-  const [janela, setJanela] = useState(14);
+function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex, onExamesCampos, onSalvarExame, onExameContexto, onSetPesoData, razoes, onRazoes }) {
+  const [janelaFixa, setJanelaFixa] = useState(14);
+  const [personalizado, setPersonalizado] = useState(false);
+  const [dataInicio, setDataInicio] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 29); return iso(d); });
   const [ativos, setAtivos] = useState(["peso", "kcal"]);
+
+  const janela = personalizado ? Math.max(1, diffDias(iso(new Date()), dataInicio) + 1) : janelaFixa;
 
   const dias = [];
   for (let k = janela - 1; k >= 0; k--) {
@@ -1902,7 +2052,10 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
     const pctMeta = metaDia.kcal > 0 ? (consumido.kcal / metaDia.kcal) * 100 : null;
     const medida = (data.medicoes && data.medicoes[key]) || null;
     const exameDia = (data.exames && data.exames[key]) || null;
-    const ponto = { key, ...consumido, metaDia, peso, pctMeta, vazio: items.length === 0, supps: (dd && dd.supps) || [] };
+    const ponto = {
+      key, ...consumido, metaDia, peso, pctMeta, vazio: items.length === 0, supps: (dd && dd.supps) || [],
+      temMedida: !!medida, temExame: !!exameDia,
+    };
     MEDIDAS_CAMPOS.forEach((c) => { ponto[c.key] = medida && medida[c.key] != null ? medida[c.key] : null; });
     (data.examesCampos || []).forEach((c) => { ponto[c.key] = exameDia && exameDia[c.key] != null ? exameDia[c.key] : null; });
     (cfg.marcadores || []).forEach((m) => { ponto["marc_" + m.id] = dd && dd.marcadores && dd.marcadores[m.id] != null ? dd.marcadores[m.id] : null; });
@@ -1928,82 +2081,111 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
 
   return (
     <>
-      <div className="row" style={{ marginBottom: 14 }}>
+      <div className="row" style={{ marginBottom: 10 }}>
         <span style={{ fontSize: 19, fontWeight: 800 }}>Histórico</span>
         <div style={{ display: "flex", gap: 5 }}>
           {[7, 14, 30].map((j) => (
-            <button key={j} className="chip" data-on={janela === j ? "1" : "0"} onClick={() => setJanela(j)} style={{ padding: "6px 11px" }}>{j}d</button>
+            <button key={j} className="chip" data-on={!personalizado && janelaFixa === j ? "1" : "0"}
+              onClick={() => { setPersonalizado(false); setJanelaFixa(j); }} style={{ padding: "6px 11px" }}>{j}d</button>
+          ))}
+          <button className="chip" data-on={personalizado ? "1" : "0"} onClick={() => setPersonalizado(!personalizado)} style={{ padding: "6px 11px" }}>personalizado</button>
+        </div>
+      </div>
+      {personalizado && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16 }}>
+          <span className="eb">de</span>
+          <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+          <span className="eb">até hoje</span>
+        </div>
+      )}
+
+      <SecaoPeso pesos={data.pesos || {}} janela={janela} onSetPesoData={onSetPesoData} />
+
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🍽️ Histórico de alimentação</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginBottom: 10 }}>
+          {cards.map((c) => (
+            <div key={c.lb} className="card" style={{ padding: 14, background: c.bg }}>
+              <div className="eb" style={{ color: c.txt, fontWeight: 700, marginBottom: 6 }}>{c.lb}</div>
+              <div className="num" style={{ fontSize: 21, fontWeight: 800, color: c.txt, letterSpacing: "-.03em" }}>{c.v}</div>
+              <div className="eb" style={{ fontSize: 10.5, marginTop: 4, color: c.txt, opacity: .75 }}>{c.sub}</div>
+            </div>
           ))}
         </div>
-      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginBottom: 12 }}>
-        {cards.map((c) => (
-          <div key={c.lb} className="card" style={{ padding: 14, background: c.bg }}>
-            <div className="eb" style={{ color: c.txt, fontWeight: 700, marginBottom: 6 }}>{c.lb}</div>
-            <div className="num" style={{ fontSize: 21, fontWeight: 800, color: c.txt, letterSpacing: "-.03em" }}>{c.v}</div>
-            <div className="eb" style={{ fontSize: 10.5, marginTop: 4, color: c.txt, opacity: .75 }}>{c.sub}</div>
+        <div className="card" style={{ padding: 14, marginBottom: 10 }}>
+          <div className="row">
+            <div>
+              <div className="eb" style={{ fontWeight: 700 }}>Suplementos completos</div>
+              <div className="eb" style={{ fontSize: 10.5, marginTop: 3 }}>dias com a lista toda marcada</div>
+            </div>
+            <span className="num" style={{ fontSize: 21, fontWeight: 800 }}>{suppOk}<span style={{ color: "var(--ink2)", fontSize: 14 }}>/{janela}</span></span>
           </div>
-        ))}
-      </div>
+        </div>
 
-      <div className="card" style={{ padding: 14, marginBottom: 12 }}>
-        <div className="row">
-          <div>
-            <div className="eb" style={{ fontWeight: 700 }}>Suplementos completos</div>
-            <div className="eb" style={{ fontSize: 10.5, marginTop: 3 }}>dias com a lista toda marcada</div>
+        <div className="card" style={{ padding: "6px 15px 15px" }}>
+          {dias.map((d) => {
+            const kp = d.prot * 4, kc = d.carb * 4, kg = d.gord * 9, soma = kp + kc + kg || 1;
+            return (
+              <button key={d.key} onClick={() => onPick(d.key)}
+                style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", borderTop: "1px solid var(--rule)", borderRadius: 0, padding: "11px 0" }}>
+                <div className="row" style={{ marginBottom: 7 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 600 }}>{label(d.key)}</span>
+                    {d.temMedida && <span title="medição registrada" style={{ fontSize: 10 }}>📏</span>}
+                    {d.temExame && <span title="exame registrado" style={{ fontSize: 10 }}>🧪</span>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    {d.pctMeta != null && (
+                      <span className="pill" style={{ background: d.pctMeta >= 90 && d.pctMeta <= 110 ? "var(--lime-s)" : "var(--coral-s)", color: d.pctMeta >= 90 && d.pctMeta <= 110 ? "var(--lime-d)" : "var(--coral-d)" }}>
+                        {n0(d.pctMeta)}% da meta
+                      </span>
+                    )}
+                    <span className="num" style={{ fontSize: 12, color: d.vazio ? "var(--ink3)" : "var(--ink)", fontWeight: d.vazio ? 500 : 700 }}>
+                      {d.vazio ? "—" : `${fmt(d.kcal)} kcal`}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ height: 9, background: "var(--rule)", borderRadius: 999 }}>
+                  <div className="ribbon" style={{ width: `${(d.kcal / max) * 100}%` }}>
+                    <div style={{ width: `${(kp / soma) * 100}%`, background: "var(--lime)" }} />
+                    <div style={{ width: `${(kc / soma) * 100}%`, background: "var(--orange)" }} />
+                    <div style={{ width: `${(kg / soma) * 100}%`, background: "var(--violet)" }} />
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+          <div style={{ display: "flex", gap: 6, marginTop: 13, flexWrap: "wrap" }}>
+            {MACROS.map((x) => <span key={x.k} className="pill" style={{ background: x.bg, color: x.txt }}>{x.nome}</span>)}
           </div>
-          <span className="num" style={{ fontSize: 21, fontWeight: 800 }}>{suppOk}<span style={{ color: "var(--ink2)", fontSize: 14 }}>/{janela}</span></span>
         </div>
       </div>
 
-      <PesoHistorico pesos={data.pesos || {}} janela={janela} />
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>📏 Histórico de medições</div>
+        <MedicoesPanel medicoes={data.medicoes || {}} altura={data.altura} onAltura={onAltura}
+          onSalvar={(dataChave, valores) => onSalvarMedicao(dataChave, valores)} />
+        <div style={{ marginTop: 10 }}>
+          <MedicoesTabela medicoes={data.medicoes || {}} janela={janela} />
+        </div>
+      </div>
 
-      <MedicoesPanel medicoes={data.medicoes || {}} altura={data.altura} onAltura={onAltura}
-        onSalvar={(dataChave, valores) => onSalvarMedicao(dataChave, valores)} />
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🧪 Histórico de exames</div>
+        <ExamesPanel campos={data.examesCampos || []} exames={data.exames || {}} contextos={data.exameContexto || {}}
+          onCampos={onExamesCampos} onSalvar={onSalvarExame} onContexto={onExameContexto} />
+        <div style={{ marginTop: 10 }}>
+          <ExamesTabela campos={data.examesCampos || []} exames={data.exames || {}} janela={janela} />
+        </div>
+      </div>
 
       <FotosPanel fotosIndex={data.fotosIndex || {}} onIndex={onFotosIndex} />
-
-      <ExamesPanel campos={data.examesCampos || []} exames={data.exames || {}} contextos={data.exameContexto || {}}
-        onCampos={onExamesCampos} onSalvar={onSalvarExame} onContexto={onExameContexto} />
 
       <Tendencias dias={dias} ativos={ativos} setAtivos={setAtivos} temMedidas={Object.keys(data.medicoes || {}).length > 0}
         examesCampos={data.examesCampos || []} marcadores={cfg.marcadores || []} medicamentos={cfg.medicamentos || []}
         razoes={razoes} onRazoes={onRazoes} />
-
-      <div className="card" style={{ padding: "6px 15px 15px" }}>
-        {dias.map((d) => {
-          const kp = d.prot * 4, kc = d.carb * 4, kg = d.gord * 9, soma = kp + kc + kg || 1;
-          return (
-            <button key={d.key} onClick={() => onPick(d.key)}
-              style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", borderTop: "1px solid var(--rule)", borderRadius: 0, padding: "11px 0" }}>
-              <div className="row" style={{ marginBottom: 7 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 600 }}>{label(d.key)}</span>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  {d.pctMeta != null && (
-                    <span className="pill" style={{ background: d.pctMeta >= 90 && d.pctMeta <= 110 ? "var(--lime-s)" : "var(--coral-s)", color: d.pctMeta >= 90 && d.pctMeta <= 110 ? "var(--lime-d)" : "var(--coral-d)" }}>
-                      {n0(d.pctMeta)}% da meta
-                    </span>
-                  )}
-                  <span className="num" style={{ fontSize: 12, color: d.vazio ? "var(--ink3)" : "var(--ink)", fontWeight: d.vazio ? 500 : 700 }}>
-                    {d.vazio ? "—" : `${fmt(d.kcal)} kcal`}
-                  </span>
-                </div>
-              </div>
-              <div style={{ height: 9, background: "var(--rule)", borderRadius: 999 }}>
-                <div className="ribbon" style={{ width: `${(d.kcal / max) * 100}%` }}>
-                  <div style={{ width: `${(kp / soma) * 100}%`, background: "var(--lime)" }} />
-                  <div style={{ width: `${(kc / soma) * 100}%`, background: "var(--orange)" }} />
-                  <div style={{ width: `${(kg / soma) * 100}%`, background: "var(--violet)" }} />
-                </div>
-              </div>
-            </button>
-          );
-        })}
-        <div style={{ display: "flex", gap: 6, marginTop: 13, flexWrap: "wrap" }}>
-          {MACROS.map((x) => <span key={x.k} className="pill" style={{ background: x.bg, color: x.txt }}>{x.nome}</span>)}
-        </div>
-      </div>
     </>
   );
 }
