@@ -114,9 +114,9 @@ const REFEICOES_MODELO_PADRAO = [{ id: uid(), nome: "Padrão", padrao: true, mea
 
 const CONFIG_PADRAO = {
   refeicoesModelos: REFEICOES_MODELO_PADRAO,
-  supps: ["Creatina 5 g", "Whey", "BCAA", "Vitamina D", "Ômega 3", "Magnésio"].map((nome) => ({ id: uid(), nome, cadaDias: 1, ancora: "2024-01-01" })),
+  supps: ["Creatina", "Whey", "BCAA", "Vitamina D", "Ômega 3", "Magnésio"].map((nome) => ({ id: uid(), nome })),
   marcadores: ["Qualidade do sono", "Cansaço ao acordar", "Produtividade", "Bem-estar", "Irritabilidade", "Estresse", "Ansiedade"].map((nome) => ({ id: uid(), nome })),
-  medicamentos: ["Testosterona", "Anastrozol"].map((nome) => ({ id: uid(), nome, cadaDias: nome === "Anastrozol" ? 7 : 4, ancora: "2024-01-01", excecao: "manter" })),
+  medicamentos: ["Testosterona", "Anastrozol"].map((nome) => ({ id: uid(), nome })),
 };
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -139,6 +139,51 @@ function suppleDue(s, day) {
   if (!s.cadaDias || s.cadaDias <= 1) return true;
   const d = diffDias(day, s.ancora);
   return d >= 0 && d % s.cadaDias === 0;
+}
+function itemDue(historico, day) {
+  const ativa = doseNaData(historico, day);
+  if (!ativa) return false;
+  const cadaDias = ativa.cadaDias || 1;
+  if (cadaDias <= 1) return true;
+  const d = diffDias(day, ativa.data);
+  return d >= 0 && d % cadaDias === 0;
+}
+function migrarDoseUnificada(dados) {
+  let mudou = false;
+  const medHist = { ...(dados.medicamentoHistorico || {}) };
+  const suppHist = { ...(dados.suplementoHistorico || {}) };
+
+  (dados.config?.medicamentos || []).forEach((m) => {
+    if (!m.ancora && !m.cadaDias) return;
+    const lista = medHist[m.id];
+    if (lista && lista.length) {
+      medHist[m.id] = lista.map((h) => (h.cadaDias ? h : { ...h, cadaDias: m.cadaDias || 1, excecao: m.excecao || "manter" }));
+      mudou = true;
+    } else if (m.ancora) {
+      medHist[m.id] = [{ data: m.ancora, dose: 0, unidade: "", cadaDias: m.cadaDias || 1, excecao: m.excecao || "manter" }];
+      mudou = true;
+    }
+  });
+  (dados.config?.supps || []).forEach((s) => {
+    if (!s.ancora && !s.cadaDias) return;
+    if (!suppHist[s.id] || !suppHist[s.id].length) {
+      suppHist[s.id] = [{ data: s.ancora || iso(new Date()), dose: 0, unidade: "", cadaDias: s.cadaDias || 1, excecao: s.excecao || "manter" }];
+      mudou = true;
+    }
+  });
+
+  if (!mudou) return dados;
+  const limpar = (lista) => lista.map(({ id, nome }) => ({ id, nome }));
+  return {
+    ...dados,
+    medicamentoHistorico: medHist,
+    suplementoHistorico: suppHist,
+    config: {
+      ...dados.config,
+      medicamentos: limpar(dados.config.medicamentos || []),
+      supps: limpar(dados.config.supps || []),
+    },
+  };
 }
 function normalizeConfig(raw) {
   if (!raw) return CONFIG_PADRAO;
@@ -243,8 +288,8 @@ width:56px;height:56px;border-radius:999px;background:var(--coral);color:#fff;fo
 display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(245,56,93,.4)}
 .nx .fab:active{transform:scale(.94)}
 .nx .fab[data-on="1"]{background:var(--ink)}
-.nx .condensada{position:fixed;top:0;left:0;right:0;z-index:44;background:#fff;padding:8px 14px;
-display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 2px 8px rgba(27,37,89,.1);flex-wrap:wrap}
+.nx .condensada{position:fixed;top:0;left:0;right:0;z-index:44;background:#fff;padding:7px 12px;
+display:flex;align-items:center;gap:0;box-shadow:0 2px 8px rgba(27,37,89,.1);overflow:hidden}
 .nx .fabMenu{position:fixed;right:20px;bottom:calc(146px + env(safe-area-inset-bottom));z-index:46;display:flex;flex-direction:column;gap:9px;align-items:flex-end}
 @media (min-width:540px){
   .nx .fab{right:calc(50% - 240px + 20px)}
@@ -322,11 +367,14 @@ export default function Nutri() {
 
   useEffect(() => {
     (async () => {
-      const vazio = { config: CONFIG_PADRAO, favs: [], custom: [], recentes: [], days: {}, pesos: {}, medicoes: {}, altura: null, fotosIndex: {}, examesCampos: [], exames: {}, exameContexto: {}, medicamentoHistorico: {}, refeicoesFavoritas: [], tendenciasRazoes: [] };
+      const vazio = { config: CONFIG_PADRAO, favs: [], custom: [], recentes: [], days: {}, pesos: {}, medicoes: {}, altura: null, fotosIndex: {}, examesCampos: [], exames: {}, exameContexto: {}, medicamentoHistorico: {}, suplementoHistorico: {}, refeicoesFavoritas: [], tendenciasRazoes: [] };
       try {
         const r = await window.storage.get(KEY);
         const p = JSON.parse(r.value);
-        setData(p && p.config ? { ...vazio, ...p } : vazio);
+        const carregado = p && p.config ? { ...vazio, ...p } : vazio;
+        const migrado = migrarDoseUnificada(carregado);
+        if (migrado !== carregado) window.storage.set(KEY, JSON.stringify(migrado)).catch(() => {});
+        setData(migrado);
         return;
       } catch { /* sem v4, tenta migrar */ }
       for (const k of LEGADO) {
@@ -334,7 +382,7 @@ export default function Nutri() {
           const r = await window.storage.get(k);
           const p = JSON.parse(r.value);
           if (p && p.config) {
-            const migrado = { ...vazio, ...p };
+            const migrado = migrarDoseUnificada({ ...vazio, ...p });
             setData(migrado);
             window.storage.set(KEY, JSON.stringify(migrado)).catch(() => {});
             setToast("Dados anteriores importados");
@@ -358,10 +406,7 @@ export default function Nutri() {
   };
 
   const cfgRaw = (data && data.config) || CONFIG_PADRAO;
-  const cfg = useMemo(() => {
-    const norm = normalizeConfig(cfgRaw);
-    return { ...norm, supps: normalizeSupps(norm.supps), medicamentos: normalizeSupps(norm.medicamentos) };
-  }, [cfgRaw]);
+  const cfg = useMemo(() => normalizeConfig(cfgRaw), [cfgRaw]);
   const refModeloPadrao = useMemo(() => cfg.refeicoesModelos.find((r) => r.padrao) || cfg.refeicoesModelos[0], [cfg]);
   const dia = useMemo(() => {
     const d = data && data.days ? data.days[day] : null;
@@ -392,7 +437,7 @@ export default function Nutri() {
 
   useEffect(() => {
     if (tab !== "dia") { setCondensado(false); return; }
-    const aoRolar = () => setCondensado(window.scrollY > 170);
+    const aoRolar = () => setCondensado(window.scrollY > 230);
     window.addEventListener("scroll", aoRolar, { passive: true });
     aoRolar();
     return () => window.removeEventListener("scroll", aoRolar);
@@ -441,11 +486,12 @@ export default function Nutri() {
 
           {condensado && (
             <BarraCondensada
+              fotoHeader={fotoHeader}
               pesos={data.pesos || {}} day={day}
-              medLista={cfg.medicamentos} medMarcados={dia.medicamentos || []}
-              suppLista={cfg.supps} suppMarcados={dia.supps || []}
+              medLista={cfg.medicamentos} medMarcados={dia.medicamentos || []} medHistorico={data.medicamentoHistorico || {}}
+              suppLista={cfg.supps} suppMarcados={dia.supps || []} suppHistorico={data.suplementoHistorico || {}}
               marcLista={cfg.marcadores} marcValores={dia.marcadores || {}}
-              tot={tot} cfg={metaHoje} />
+              tot={tot} cfg={metaHoje} agua={dia.agua || 0} metaAgua={refModeloPadrao.metaAgua || 2500} />
           )}
 
           <PainelTopo
@@ -453,15 +499,38 @@ export default function Nutri() {
             onSetPeso={(kg) => persist({ ...data, pesos: { ...(data.pesos || {}), [day]: kg } })}
             medLista={cfg.medicamentos} medMarcados={dia.medicamentos || []} medHistorico={data.medicamentoHistorico || {}}
             onToggleMed={(m) => {
+              const hist = (data.medicamentoHistorico || {})[m.id];
               const jaMarcado = (dia.medicamentos || []).includes(m.nome);
+              const ativa = doseNaData(hist, day);
+              const recalcular = !jaMarcado && ativa && ativa.excecao === "recalcular" && !itemDue(hist, day);
+              if (recalcular && !window.confirm(`${m.nome} não estava previsto para hoje. Como a regra dele é "recalcular ciclo", marcar agora vai contar os próximos dias a partir de hoje. Confirma?`)) return;
               const novoMarcados = jaMarcado ? dia.medicamentos.filter((z) => z !== m.nome) : [...(dia.medicamentos || []), m.nome];
               const novoDia = { ...dia, medicamentos: novoMarcados };
-              const recalcular = !jaMarcado && m.excecao === "recalcular" && !suppleDue(m, day);
-              const novoConfig = recalcular ? { ...cfg, medicamentos: cfg.medicamentos.map((x) => (x.id === m.id ? { ...x, ancora: day } : x)) } : cfg;
-              persist({ ...data, config: novoConfig, days: { ...data.days, [day]: novoDia } });
+              let novoHistGeral = data.medicamentoHistorico || {};
+              if (recalcular) {
+                const novaEntrada = { ...ativa, data: day };
+                const listaAtual = (hist || []).filter((h) => h.data !== day);
+                novoHistGeral = { ...novoHistGeral, [m.id]: [...listaAtual, novaEntrada].sort((a, b) => a.data.localeCompare(b.data)) };
+              }
+              persist({ ...data, medicamentoHistorico: novoHistGeral, days: { ...data.days, [day]: novoDia } });
             }}
-            suppLista={cfg.supps} suppMarcados={dia.supps || []}
-            onToggleSupp={(s) => setDia({ supps: (dia.supps || []).includes(s) ? dia.supps.filter((z) => z !== s) : [...(dia.supps || []), s] })}
+            suppLista={cfg.supps} suppMarcados={dia.supps || []} suppHistorico={data.suplementoHistorico || {}}
+            onToggleSupp={(s) => {
+              const hist = (data.suplementoHistorico || {})[s.id];
+              const jaMarcado = (dia.supps || []).includes(s.nome);
+              const ativa = doseNaData(hist, day);
+              const recalcular = !jaMarcado && ativa && ativa.excecao === "recalcular" && !itemDue(hist, day);
+              if (recalcular && !window.confirm(`${s.nome} não estava previsto para hoje. Como a regra dele é "recalcular ciclo", marcar agora vai contar os próximos dias a partir de hoje. Confirma?`)) return;
+              const novoMarcados = jaMarcado ? dia.supps.filter((z) => z !== s.nome) : [...(dia.supps || []), s.nome];
+              const novoDia = { ...dia, supps: novoMarcados };
+              let novoHistGeral = data.suplementoHistorico || {};
+              if (recalcular) {
+                const novaEntrada = { ...ativa, data: day };
+                const listaAtual = (hist || []).filter((h) => h.data !== day);
+                novoHistGeral = { ...novoHistGeral, [s.id]: [...listaAtual, novaEntrada].sort((a, b) => a.data.localeCompare(b.data)) };
+              }
+              persist({ ...data, suplementoHistorico: novoHistGeral, days: { ...data.days, [day]: novoDia } });
+            }}
             marcLista={cfg.marcadores} marcValores={dia.marcadores || {}}
             onMarcValor={(id, v) => setDia({ marcadores: { ...(dia.marcadores || {}), [id]: v } })}
             onMarcLista={(l) => persist({ ...data, config: { ...cfg, marcadores: l } })}
@@ -623,38 +692,50 @@ export default function Nutri() {
 }
 
 /* ---------- suplementos: fino, no topo, expansível, editável ---------- */
-function BarraCondensada({ pesos, day, medLista, medMarcados, suppLista, suppMarcados, marcLista, marcValores, tot, cfg }) {
-  const medHoje = medLista.filter((m) => suppleDue(m, day));
+function BarraCondensada({ fotoHeader, pesos, day, medLista, medMarcados, medHistorico, suppLista, suppMarcados, suppHistorico, marcLista, marcValores, tot, cfg, agua, metaAgua }) {
+  const medHoje = medLista.filter((m) => itemDue((medHistorico || {})[m.id], day));
   const medFeito = medHoje.filter((m) => medMarcados.includes(m.nome)).length;
-  const suppHoje = suppLista.filter((s) => suppleDue(s, day));
+  const suppHoje = suppLista.filter((s) => itemDue((suppHistorico || {})[s.id], day));
   const suppFeito = suppHoje.filter((s) => suppMarcados.includes(s.nome)).length;
   const marcPreenchidos = marcLista.filter((m) => marcValores[m.id] != null);
   const marcMedia = marcPreenchidos.length ? marcPreenchidos.reduce((a, m) => a + marcValores[m.id], 0) / marcPreenchidos.length : null;
 
-  const Item = ({ v }) => <span className="num" style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ink2)" }}>{v}</span>;
-  const Sep = () => <span style={{ color: "var(--rule)" }}>│</span>;
+  const Mini = ({ titulo, valor }) => (
+    <div style={{ background: "var(--bg)", borderRadius: 9, padding: "5px 9px", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, flex: "0 0 auto", minWidth: 50 }}>
+      <span className="eb" style={{ fontSize: 8.5 }}>{titulo}</span>
+      <span className="num" style={{ fontSize: 10.5, fontWeight: 800, color: "var(--ink)" }}>{valor}</span>
+    </div>
+  );
 
   return (
     <div className="condensada">
-      <Item v={pesos[day] != null ? `${n1(pesos[day])}kg` : "—"} /><Sep />
-      <Item v={`${medFeito}/${medHoje.length}`} /><Sep />
-      <Item v={`${suppFeito}/${suppHoje.length}`} /><Sep />
-      <Item v={marcMedia != null ? `${marcMedia.toFixed(1)}/5` : "—"} />
-      <span style={{ width: 12 }} />
-      <Item v={`${fmt(tot.kcal)}/${fmt(cfg.kcal)}`} /><Sep />
-      <Item v={`${fmt(tot.carb)}/${fmt(cfg.carb)}`} /><Sep />
-      <Item v={`${fmt(tot.prot)}/${fmt(cfg.prot)}`} /><Sep />
-      <Item v={`${fmt(tot.gord)}/${fmt(cfg.gord)}`} />
+      <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 0 auto", paddingRight: 10, marginRight: 10, borderRight: "1px solid var(--rule)" }}>
+        <div style={{ width: 26, height: 26, borderRadius: 999, overflow: "hidden", background: "var(--coral-s)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "var(--coral-d)", flex: "0 0 auto" }}>
+          {fotoHeader ? <img src={fotoHeader} alt="Pedro" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "P"}
+        </div>
+        <span style={{ fontSize: 12.5, fontWeight: 700 }}>Pedro</span>
+      </div>
+      <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
+        <Mini titulo="Peso" valor={pesos[day] != null ? `${n1(pesos[day])}kg` : "—"} />
+        <Mini titulo="Meds" valor={`${medFeito}/${medHoje.length}`} />
+        <Mini titulo="Supl" valor={`${suppFeito}/${suppHoje.length}`} />
+        <Mini titulo="Humor" valor={marcMedia != null ? `${marcMedia.toFixed(1)}/5` : "—"} />
+        <Mini titulo="Água" valor={`${((agua || 0) / 1000).toFixed(1)}/${(metaAgua / 1000).toFixed(1)}L`} />
+        <Mini titulo="Kcal" valor={`${fmt(tot.kcal)}/${fmt(cfg.kcal)}`} />
+        <Mini titulo="Carbo" valor={`${fmt(tot.carb)}/${fmt(cfg.carb)}`} />
+        <Mini titulo="Prot" valor={`${fmt(tot.prot)}/${fmt(cfg.prot)}`} />
+        <Mini titulo="Gord" valor={`${fmt(tot.gord)}/${fmt(cfg.gord)}`} />
+      </div>
     </div>
   );
 }
 
-function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico, onToggleMed, suppLista, suppMarcados, onToggleSupp, marcLista, marcValores, onMarcValor, onMarcLista }) {
+function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico, onToggleMed, suppLista, suppMarcados, suppHistorico, onToggleSupp, marcLista, marcValores, onMarcValor, onMarcLista }) {
   const [aberto, setAberto] = useState(null);
 
-  const medHoje = medLista.filter((m) => suppleDue(m, day));
+  const medHoje = medLista.filter((m) => itemDue((medHistorico || {})[m.id], day));
   const medFeito = medHoje.filter((m) => medMarcados.includes(m.nome)).length;
-  const suppHoje = suppLista.filter((s) => suppleDue(s, day));
+  const suppHoje = suppLista.filter((s) => itemDue((suppHistorico || {})[s.id], day));
   const suppFeito = suppHoje.filter((s) => suppMarcados.includes(s.nome)).length;
   const marcPreenchidos = marcLista.filter((m) => marcValores[m.id] != null);
   const marcMedia = marcPreenchidos.length ? marcPreenchidos.reduce((a, m) => a + marcValores[m.id], 0) / marcPreenchidos.length : null;
@@ -681,8 +762,8 @@ function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico
       {aberto && (
         <div className="card" style={{ padding: 13, marginTop: 8 }}>
           {aberto === "peso" && <PesoConteudo pesos={pesos} day={day} onSet={onSetPeso} />}
-          {aberto === "med" && <ListaConteudo lista={medLista} marcados={medMarcados} historico={medHistorico} day={day} onToggle={onToggleMed} comDose />}
-          {aberto === "supp" && <ListaConteudo lista={suppLista} marcados={suppMarcados} day={day} onToggle={onToggleSupp} />}
+          {aberto === "med" && <ListaConteudo lista={medLista} marcados={medMarcados} historico={medHistorico} day={day} onToggle={onToggleMed} />}
+          {aberto === "supp" && <ListaConteudo lista={suppLista} marcados={suppMarcados} historico={suppHistorico} day={day} onToggle={onToggleSupp} />}
           {aberto === "humor" && <Marcadores lista={marcLista} valores={marcValores} onValor={onMarcValor} onLista={onMarcLista} embutido />}
         </div>
       )}
@@ -737,15 +818,18 @@ function PesoConteudo({ pesos, day, onSet }) {
   );
 }
 
-function ListaConteudo({ lista, marcados, historico, day, onToggle, comDose }) {
-  const hoje = lista.filter((m) => suppleDue(m, day));
+function ListaConteudo({ lista, marcados, historico, day, onToggle }) {
+  const dueDe = (m) => itemDue((historico || {})[m.id], day);
+  const doseDe = (m) => doseNaData((historico || {})[m.id], day);
+
+  const hoje = lista.filter(dueDe);
   const todosMarcados = hoje.length > 0 && hoje.every((m) => marcados.includes(m.nome));
 
   function marcarTudo() {
     hoje.forEach((m) => {
       const marcado = marcados.includes(m.nome);
-      if (todosMarcados && marcado) onToggle(comDose ? m : m.nome);
-      if (!todosMarcados && !marcado) onToggle(comDose ? m : m.nome);
+      if (todosMarcados && marcado) onToggle(m);
+      if (!todosMarcados && !marcado) onToggle(m);
     });
   }
 
@@ -758,19 +842,19 @@ function ListaConteudo({ lista, marcados, historico, day, onToggle, comDose }) {
         </button>
       )}
       {lista.map((m, i) => {
-        const due = suppleDue(m, day);
-        const dose = comDose ? doseNaData((historico || {})[m.id], day) : null;
-        const clicavel = comDose ? m.ancora : due;
+        const due = dueDe(m);
+        const dose = doseDe(m);
+        const clicavel = !!dose;
         return (
           <div key={m.id || m.nome + i} style={{ padding: "8px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
-            <button onClick={() => clicavel && onToggle(comDose ? m : m.nome)} style={{ display: "flex", alignItems: "center", gap: 9, background: "transparent", padding: 0, width: "100%", textAlign: "left", opacity: clicavel ? 1 : .45 }}>
+            <button onClick={() => clicavel && onToggle(m)} style={{ display: "flex", alignItems: "center", gap: 9, background: "transparent", padding: 0, width: "100%", textAlign: "left", opacity: clicavel ? 1 : .45 }}>
               <span className="box" data-on={marcados.includes(m.nome) ? "1" : "0"}>{marcados.includes(m.nome) ? "✓" : ""}</span>
               <span style={{ fontSize: 13.5, fontWeight: marcados.includes(m.nome) ? 600 : 400, color: marcados.includes(m.nome) ? "var(--ink)" : "var(--ink2)", flex: 1 }}>
-                {m.nome}{dose ? <span style={{ color: "var(--ink2)", fontWeight: 400 }}> · {dose.dose}{dose.unidade}{dose.horario ? ` · ${dose.horario}` : ""}</span> : null}
+                {m.nome}{dose ? <span style={{ color: "var(--ink2)", fontWeight: 400 }}> · {dose.dose}{dose.unidade}{dose.horario ? ` · ${dose.horario}` : ""}</span> : <span style={{ color: "var(--coral-d)", fontWeight: 400 }}> · sem dose registrada</span>}
               </span>
-              {(m.cadaDias || 1) > 1 && (
+              {dose && (dose.cadaDias || 1) > 1 && (
                 <span className="pill" style={{ background: due ? "var(--orange-s)" : "var(--rule)", color: due ? "var(--orange-d)" : "var(--ink3)" }}>
-                  {due ? "hoje" : `a cada ${m.cadaDias}d`}
+                  {due ? "hoje" : `a cada ${dose.cadaDias}d`}
                 </span>
               )}
             </button>
@@ -778,7 +862,7 @@ function ListaConteudo({ lista, marcados, historico, day, onToggle, comDose }) {
         );
       })}
       <div className="eb" style={{ marginTop: 9, lineHeight: 1.5 }}>
-        {comDose ? "Fora do dia previsto, ainda dá pra marcar manualmente — a regra de exceção (Ajustes) decide se isso muda os próximos dias." : "Para adicionar ou mudar a periodicidade, vá em Ajustes."}
+        Fora do dia previsto, ainda dá pra marcar manualmente — a regra de exceção (Ajustes) decide se isso muda os próximos dias.
       </div>
     </div>
   );
@@ -789,30 +873,44 @@ function Marcadores({ lista, valores, onValor, onLista, embutido }) {
   const [edit, setEdit] = useState(false);
   const preenchidos = lista.filter((m) => valores[m.id] != null).length;
 
+  if (embutido) {
+    return (
+      <div>
+        {lista.length === 0 && <div className="eb" style={{ padding: "6px 0" }}>Nada cadastrado. Adicione em Ajustes.</div>}
+        {lista.map((m, i) => (
+          <div key={m.id} style={{ padding: "9px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: valores[m.id] != null ? 600 : 400, marginBottom: 7 }}>{m.nome}</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button key={n} onClick={() => onValor(m.id, valores[m.id] === n ? null : n)}
+                  style={{ flex: 1, padding: "9px 0", borderRadius: 8, fontWeight: 700, fontSize: 13,
+                    background: valores[m.id] === n ? "var(--violet)" : "var(--bg)",
+                    color: valores[m.id] === n ? "#fff" : "var(--ink2)" }}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="eb" style={{ marginTop: 9, lineHeight: 1.5 }}>1 = baixo, 5 = alto. Preencha quando lembrar. Para adicionar ou renomear marcadores, vá em Ajustes.</div>
+      </div>
+    );
+  }
+
   const conteudo = (
-    <div style={embutido ? {} : { marginTop: 10 }}>
+    <div style={{ marginTop: 10 }}>
       {lista.map((m, i) => (
         <div key={m.id} style={{ padding: "9px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
           {edit ? (
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <input value={m.nome} style={{ flex: 1, padding: "7px 9px", fontSize: 13 }}
+              <input value={m.nome} style={{ flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 600 }}
                 onChange={(e) => onLista(lista.map((z, k) => (k === i ? { ...z, nome: e.target.value } : z)))} />
               <button className="mini" onClick={() => onLista(lista.filter((_, k) => k !== i))}>✕</button>
             </div>
           ) : (
-            <>
-              <div style={{ fontSize: 13.5, fontWeight: valores[m.id] != null ? 600 : 400, marginBottom: 7 }}>{m.nome}</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button key={n} onClick={() => onValor(m.id, valores[m.id] === n ? null : n)}
-                    style={{ flex: 1, padding: "9px 0", borderRadius: 8, fontWeight: 700, fontSize: 13,
-                      background: valores[m.id] === n ? "var(--violet)" : "var(--bg)",
-                      color: valores[m.id] === n ? "#fff" : "var(--ink2)" }}>
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </>
+            <div className="row">
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{m.nome}</span>
+            </div>
           )}
         </div>
       ))}
@@ -820,21 +918,17 @@ function Marcadores({ lista, valores, onValor, onLista, embutido }) {
         <button className="ghost" style={{ flex: 1 }} onClick={() => setEdit(!edit)}>{edit ? "concluir" : "editar lista"}</button>
         {edit && <button className="ghost" onClick={() => onLista([...lista, { id: uid(), nome: "Novo marcador" }])}>+ item</button>}
       </div>
-      <div className="eb" style={{ marginTop: 9, lineHeight: 1.5 }}>1 = baixo, 5 = alto. Preencha quando lembrar — não precisa ser todo dia.</div>
+      <div className="eb" style={{ marginTop: 9, lineHeight: 1.5 }}>Esses marcadores aparecem no card "Humor" do Diário, com escala de 1 a 5.</div>
     </div>
   );
-
-  if (embutido) return conteudo;
 
   return (
     <div className="strip">
       <button className="stripBtn" onClick={() => setOpen(!open)}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: 14 }}>🧭</span>
-          <span style={{ fontSize: 13.5, fontWeight: 600 }}>Marcações diárias</span>
-          <span className="pill" style={{ background: preenchidos === lista.length && lista.length ? "var(--lime-s)" : "var(--rule)", color: preenchidos === lista.length && lista.length ? "var(--lime-d)" : "var(--ink2)" }}>
-            {preenchidos}/{lista.length}
-          </span>
+          <span style={{ fontSize: 14 }}>😊</span>
+          <span style={{ fontSize: 13.5, fontWeight: 600 }}>Humor — marcadores</span>
+          <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>{lista.length}</span>
         </div>
         <span style={{ color: "var(--ink3)", fontSize: 12 }}>{open ? "▲" : "▼"}</span>
       </button>
@@ -843,24 +937,31 @@ function Marcadores({ lista, valores, onValor, onLista, embutido }) {
   );
 }
 
-function MedicamentosStrip({ lista, historico, onLista, onDose }) {
+function ItemDoseStrip({ titulo, icone, lista, historico, onLista, onDose, novoNome }) {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState(false);
   const [alterando, setAlterando] = useState(null);
   const [histAberto, setHistAberto] = useState(null);
-  const [form, setForm] = useState({ dose: "", unidade: "mg", horario: "", data: iso(new Date()) });
+  const [form, setForm] = useState({ dose: "", unidade: "mg", cadaDias: "1", excecao: "manter", horario: "", data: iso(new Date()) });
 
   const hoje = iso(new Date());
   const ativos = lista.filter((m) => doseNaData(historico[m.id], hoje)).length;
 
-  function abrirAlterar(m) {
+  function abrirNovaDose(m) {
     const atual = doseNaData(historico[m.id], hoje);
-    setForm({ dose: atual ? String(atual.dose) : "", unidade: atual ? atual.unidade : "mg", horario: atual ? atual.horario : "", data: hoje });
+    setForm({
+      dose: atual ? String(atual.dose) : "", unidade: atual ? atual.unidade : "mg",
+      cadaDias: atual ? String(atual.cadaDias || 1) : "1", excecao: atual ? (atual.excecao || "manter") : "manter",
+      horario: atual ? (atual.horario || "") : "", data: hoje,
+    });
     setAlterando(m.id);
   }
   function salvarDose() {
     if (form.dose === "") return;
-    onDose(alterando, { data: form.data, dose: Number(form.dose), unidade: form.unidade, horario: form.horario });
+    const hist = historico[alterando] || [];
+    const semEssaData = hist.filter((h) => h.data !== form.data);
+    const nova = { data: form.data, dose: Number(form.dose), unidade: form.unidade, cadaDias: Math.max(1, n0(form.cadaDias) || 1), excecao: form.excecao, horario: form.horario };
+    onDose(alterando, [...semEssaData, nova].sort((a, b) => a.data.localeCompare(b.data)));
     setAlterando(null);
   }
 
@@ -868,8 +969,8 @@ function MedicamentosStrip({ lista, historico, onLista, onDose }) {
     <div className="strip">
       <button className="stripBtn" onClick={() => setOpen(!open)}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: 14 }}>🧠</span>
-          <span style={{ fontSize: 13.5, fontWeight: 600 }}>Medicamentos</span>
+          <span style={{ fontSize: 14 }}>{icone}</span>
+          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{titulo}</span>
           <span className="pill" style={{ background: ativos ? "var(--lime-s)" : "var(--rule)", color: ativos ? "var(--lime-d)" : "var(--ink2)" }}>
             {ativos}/{lista.length}
           </span>
@@ -881,99 +982,93 @@ function MedicamentosStrip({ lista, historico, onLista, onDose }) {
         <div style={{ marginTop: 10 }}>
           {lista.map((m, i) => {
             const atual = doseNaData(historico[m.id], hoje);
+            const due = itemDue(historico[m.id], hoje);
             const hist = (historico[m.id] || []).slice().sort((a, b) => b.data.localeCompare(a.data));
             return (
               <div key={m.id} style={{ padding: "9px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
                 {edit ? (
-                  <div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-                      <input value={m.nome} style={{ flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 600 }}
-                        onChange={(e) => onLista(lista.map((z, k) => (k === i ? { ...z, nome: e.target.value } : z)))} />
-                      <button className="mini" onClick={() => onLista(lista.filter((_, k) => k !== i))}>✕</button>
-                    </div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 9, flexWrap: "wrap" }}>
-                      <span className="eb" style={{ whiteSpace: "nowrap", fontWeight: 700 }}>a cada</span>
-                      <input className="num" inputMode="numeric" value={m.cadaDias || 1} style={{ width: 48, padding: "8px 4px", fontSize: 14, fontWeight: 700, textAlign: "center" }}
-                        onChange={(e) => onLista(lista.map((z, k) => (k === i ? { ...z, cadaDias: Math.max(1, n0(e.target.value.replace(/\D/g, "")) || 1) } : z)))} />
-                      <span className="eb" style={{ fontWeight: 700 }}>dias, a partir de</span>
-                      <input type="date" value={m.ancora || ""} style={{ padding: "7px 8px", fontSize: 13, flex: 1, minWidth: 130 }}
-                        onChange={(e) => onLista(lista.map((z, k) => (k === i ? { ...z, ancora: e.target.value } : z)))} />
-                      <button className="chip" data-on={m.ancora ? "0" : "1"}
-                        onClick={() => onLista(lista.map((z, k) => (k === i ? { ...z, ancora: z.ancora ? "" : hoje } : z)))}>
-                        {m.ancora ? "pausar" : "inativo — reativar"}
-                      </button>
-                    </div>
-                    <div className="eb" style={{ marginBottom: 5, fontWeight: 700 }}>se tomar fora do dia previsto</div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button className="chip" data-on={m.excecao === "recalcular" ? "1" : "0"}
-                        onClick={() => onLista(lista.map((z, k) => (k === i ? { ...z, excecao: "recalcular" } : z)))}>recalcular ciclo</button>
-                      <button className="chip" data-on={(m.excecao || "manter") === "manter" ? "1" : "0"}
-                        onClick={() => onLista(lista.map((z, k) => (k === i ? { ...z, excecao: "manter" } : z)))}>manter cronograma</button>
-                    </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input value={m.nome} style={{ flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 600 }}
+                      onChange={(e) => onLista(lista.map((z, k) => (k === i ? { ...z, nome: e.target.value } : z)))} />
+                    <button className="mini" onClick={() => onLista(lista.filter((_, k) => k !== i))}>✕</button>
                   </div>
                 ) : (
                   <>
                     <div className="row" style={{ marginBottom: 6 }}>
                       <span style={{ fontSize: 13.5, fontWeight: 600 }}>{m.nome}</span>
                       <div style={{ display: "flex", gap: 5 }}>
-                        {!m.ancora && <span className="pill" style={{ background: "var(--coral-s)", color: "var(--coral-d)" }}>inativo</span>}
-                        {(m.cadaDias || 1) > 1 && <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>a cada {m.cadaDias}d</span>}
-                        {atual ? (
+                        {!atual && <span className="pill" style={{ background: "var(--coral-s)", color: "var(--coral-d)" }}>sem dose</span>}
+                        {atual && (atual.cadaDias || 1) > 1 && <span className="pill" style={{ background: due ? "var(--orange-s)" : "var(--rule)", color: due ? "var(--orange-d)" : "var(--ink2)" }}>{due ? "hoje" : `a cada ${atual.cadaDias}d`}</span>}
+                        {atual && (
                           <span className="pill" style={{ background: "var(--violet-s)", color: "var(--violet-d)" }}>{atual.dose} {atual.unidade}{atual.horario ? ` · ${atual.horario}` : ""}</span>
-                        ) : (
-                          <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>sem dose</span>
                         )}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button className="ghost" style={{ flex: 1 }} onClick={() => abrirAlterar(m)}>alterar dose</button>
+                      <button className="ghost" style={{ flex: 1 }} onClick={() => abrirNovaDose(m)}>nova dose</button>
                       {hist.length > 0 && <button className="ghost" onClick={() => setHistAberto(histAberto === m.id ? null : m.id)}>{histAberto === m.id ? "ocultar" : "histórico"}</button>}
                     </div>
-                    {histAberto === m.id && (
-                      <div style={{ marginTop: 8 }}>
-                        {hist.map((h, k) => (
-                          <div key={h.data} className="row" style={{ padding: "5px 0", borderTop: k ? "1px solid var(--rule)" : 0 }}>
-                            <span className="eb">{label(h.data)}</span>
-                            <span className="num" style={{ fontSize: 12 }}>{h.dose} {h.unidade}{h.horario ? ` · ${h.horario}` : ""}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </>
+                )}
+                {histAberto === m.id && (
+                  <div style={{ marginTop: 8 }}>
+                    {hist.map((h, k) => (
+                      <div key={h.data} style={{ padding: "6px 0", borderTop: k ? "1px solid var(--rule)" : 0 }}>
+                        <div className="row">
+                          <span className="eb">{label(h.data)}</span>
+                          <span className="num" style={{ fontSize: 12 }}>{h.dose} {h.unidade}{h.horario ? ` · ${h.horario}` : ""}</span>
+                        </div>
+                        <div className="eb" style={{ marginTop: 2, fontSize: 10 }}>
+                          a cada {h.cadaDias || 1}d · {h.excecao === "recalcular" ? "recalcula ciclo" : "mantém cronograma"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             );
           })}
           <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
             <button className="ghost" style={{ flex: 1 }} onClick={() => setEdit(!edit)}>{edit ? "concluir" : "editar lista"}</button>
-            {edit && <button className="ghost" onClick={() => onLista([...lista, { id: uid(), nome: "Novo medicamento", cadaDias: 1, ancora: hoje, excecao: "manter" }])}>+ item</button>}
+            {edit && <button className="ghost" onClick={() => onLista([...lista, { id: uid(), nome: novoNome }])}>+ item</button>}
           </div>
-          {lista.length === 0 && !edit && <div className="eb" style={{ padding: "8px 0" }}>Toque em "editar lista" para adicionar um medicamento.</div>}
+          {lista.length === 0 && !edit && <div className="eb" style={{ padding: "8px 0" }}>Toque em "editar lista" para adicionar.</div>}
         </div>
       )}
 
       {alterando && (
         <div className="sheet">
           <div className="row" style={{ marginBottom: 16 }}>
-            <span style={{ fontSize: 17, fontWeight: 700 }}>{lista.find((m) => m.id === alterando)?.nome}</span>
+            <span style={{ fontSize: 17, fontWeight: 700 }}>{lista.find((m) => m.id === alterando)?.nome} · nova dose</span>
             <button className="ghost" onClick={() => setAlterando(null)}>fechar</button>
           </div>
-          <div className="eb" style={{ marginBottom: 5 }}>Válido a partir de</div>
-          <input type="date" value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} style={{ marginBottom: 12 }} />
-          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+          <div className="eb" style={{ marginBottom: 5, fontWeight: 700 }}>Válido a partir de</div>
+          <input type="date" value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} style={{ marginBottom: 14 }} />
+          <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
             <div style={{ flex: 1 }}>
-              <div className="eb" style={{ marginBottom: 4 }}>Dose</div>
-              <input className="num" inputMode="decimal" value={form.dose}
+              <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Dose</div>
+              <input className="num" inputMode="decimal" value={form.dose} placeholder="ex.: 100"
                 onChange={(e) => setForm({ ...form, dose: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
             </div>
-            <div style={{ width: 78 }}>
-              <div className="eb" style={{ marginBottom: 4 }}>Unidade</div>
-              <input value={form.unidade} onChange={(e) => setForm({ ...form, unidade: e.target.value })} />
+            <div style={{ width: 84 }}>
+              <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Unidade</div>
+              <input value={form.unidade} placeholder="mg, g, ml…" onChange={(e) => setForm({ ...form, unidade: e.target.value })} />
             </div>
           </div>
-          <div className="eb" style={{ marginBottom: 4 }}>Horário</div>
-          <input placeholder="hh:mm" value={form.horario} onChange={(e) => setForm({ ...form, horario: e.target.value })} style={{ marginBottom: 16 }} />
-          <button className="cta" onClick={salvarDose} disabled={form.dose === ""}>Salvar</button>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 14 }}>
+            <span className="eb" style={{ whiteSpace: "nowrap", fontWeight: 700 }}>a cada</span>
+            <input className="num" inputMode="numeric" value={form.cadaDias} style={{ width: 60, textAlign: "center", fontWeight: 700 }}
+              onChange={(e) => setForm({ ...form, cadaDias: e.target.value.replace(/\D/g, "") })} />
+            <span className="eb" style={{ fontWeight: 700 }}>dias</span>
+          </div>
+          <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Horário (opcional)</div>
+          <input placeholder="hh:mm" value={form.horario} onChange={(e) => setForm({ ...form, horario: e.target.value })} style={{ marginBottom: 14 }} />
+          <div className="eb" style={{ marginBottom: 5, fontWeight: 700 }}>Se tomar fora do dia previsto</div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+            <button className="chip" data-on={form.excecao === "recalcular" ? "1" : "0"} onClick={() => setForm({ ...form, excecao: "recalcular" })}>recalcular ciclo</button>
+            <button className="chip" data-on={form.excecao !== "recalcular" ? "1" : "0"} onClick={() => setForm({ ...form, excecao: "manter" })}>manter cronograma</button>
+          </div>
+          <button className="cta" onClick={salvarDose} disabled={form.dose === ""}>Salvar dose</button>
         </div>
       )}
     </div>
@@ -1000,12 +1095,12 @@ const CSS_STICKY = `
 .nx .stickyTable .grupo td{background:var(--bg);font-weight:700;color:var(--ink2);font-size:10px;text-transform:uppercase;letter-spacing:.04em;position:static;box-shadow:none}
 `;
 
-function SecaoPeso({ pesos, janela, onSetPesoData }) {
+function SecaoPeso({ pesos, dataInicio, dataFim, onSetPesoData }) {
   const [aberto, setAberto] = useState(false);
   const [dt, setDt] = useState(iso(new Date()));
   const [val, setVal] = useState("");
 
-  const datas = Object.keys(pesos).filter((d) => { const dd = diffDias(iso(new Date()), d); return dd >= 0 && dd < janela; }).sort();
+  const datas = Object.keys(pesos).filter((d) => d >= dataInicio && d <= dataFim).sort();
   const chartData = datas.map((d) => ({ data: label(d).slice(0, 6), kg: pesos[d] }));
 
   function salvar() {
@@ -1048,7 +1143,7 @@ function SecaoPeso({ pesos, janela, onSetPesoData }) {
         </div>
       )}
 
-      <PesoHistorico pesos={pesos} janela={janela} />
+      <PesoHistorico pesos={pesos} dataInicio={dataInicio} dataFim={dataFim} />
 
       {datas.length > 0 && (
         <div className="card" style={{ padding: "4px 15px 8px", marginTop: 10 }}>
@@ -1071,8 +1166,8 @@ function SecaoPeso({ pesos, janela, onSetPesoData }) {
   );
 }
 
-function MedicoesTabela({ medicoes, janela }) {
-  const datas = Object.keys(medicoes).filter((d) => { const dd = diffDias(iso(new Date()), d); return dd >= 0 && dd < janela; }).sort();
+function MedicoesTabela({ medicoes, dataInicio, dataFim }) {
+  const datas = Object.keys(medicoes).filter((d) => d >= dataInicio && d <= dataFim).sort();
   const campos = MEDIDAS_CAMPOS.filter((c) => datas.some((d) => medicoes[d][c.key] != null));
   if (!datas.length) return <div className="eb" style={{ padding: "10px 0" }}>Nenhuma medição no período.</div>;
   return (
@@ -1092,8 +1187,8 @@ function MedicoesTabela({ medicoes, janela }) {
   );
 }
 
-function ExamesTabela({ campos, exames, janela }) {
-  const datas = Object.keys(exames).filter((d) => { const dd = diffDias(iso(new Date()), d); return dd >= 0 && dd < janela; }).sort();
+function ExamesTabela({ campos, exames, dataInicio, dataFim }) {
+  const datas = Object.keys(exames).filter((d) => d >= dataInicio && d <= dataFim).sort();
   if (!datas.length || !campos.length) return <div className="eb" style={{ padding: "10px 0" }}>Nenhum exame no período.</div>;
   const grupos = {};
   campos.forEach((c) => {
@@ -1125,11 +1220,8 @@ function ExamesTabela({ campos, exames, janela }) {
   );
 }
 
-function PesoHistorico({ pesos, janela }) {
-  const chaves = Object.keys(pesos).filter((d) => {
-    const dias = diffDias(iso(new Date()), d);
-    return dias >= 0 && dias < janela;
-  }).sort();
+function PesoHistorico({ pesos, dataInicio, dataFim }) {
+  const chaves = Object.keys(pesos).filter((d) => d >= dataInicio && d <= dataFim).sort();
   if (!chaves.length) return null;
   const valores = chaves.map((d) => pesos[d]);
   const media = valores.reduce((a, b) => a + b, 0) / valores.length;
@@ -2033,16 +2125,27 @@ const SERIES_TENDENCIA = [
 ];
 
 function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex, onExamesCampos, onSalvarExame, onExameContexto, onSetPesoData, razoes, onRazoes }) {
-  const [janelaFixa, setJanelaFixa] = useState(14);
-  const [personalizado, setPersonalizado] = useState(false);
-  const [dataInicio, setDataInicio] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 29); return iso(d); });
+  const hojeIso = iso(new Date());
+  const [preset, setPreset] = useState("14d");
+  const [dataInicio, setDataInicio] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 13); return iso(d); });
+  const [dataFim, setDataFim] = useState(hojeIso);
   const [ativos, setAtivos] = useState(["peso", "kcal"]);
 
-  const janela = personalizado ? Math.max(1, diffDias(iso(new Date()), dataInicio) + 1) : janelaFixa;
+  function aplicarPreset(p) {
+    setPreset(p);
+    if (p === "hoje") { setDataInicio(hojeIso); setDataFim(hojeIso); }
+    else if (p !== "personalizado") {
+      const n = { "7d": 7, "14d": 14, "30d": 30 }[p];
+      const d = new Date(); d.setDate(d.getDate() - (n - 1));
+      setDataInicio(iso(d)); setDataFim(hojeIso);
+    }
+  }
+
+  const janela = Math.max(1, diffDias(dataFim, dataInicio) + 1);
 
   const dias = [];
-  for (let k = janela - 1; k >= 0; k--) {
-    const d = new Date(); d.setDate(d.getDate() - k);
+  for (let k = 0; k < janela; k++) {
+    const d = fromIso(dataInicio); d.setDate(d.getDate() + k);
     const key = iso(d);
     const dd = data.days && data.days[key];
     const items = ((dd && dd.meals) || []).flatMap((m) => m.items || []);
@@ -2083,19 +2186,19 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
     <>
       <div className="row" style={{ marginBottom: 10 }}>
         <span style={{ fontSize: 19, fontWeight: 800 }}>Histórico</span>
-        <div style={{ display: "flex", gap: 5 }}>
-          {[7, 14, 30].map((j) => (
-            <button key={j} className="chip" data-on={!personalizado && janelaFixa === j ? "1" : "0"}
-              onClick={() => { setPersonalizado(false); setJanelaFixa(j); }} style={{ padding: "6px 11px" }}>{j}d</button>
-          ))}
-          <button className="chip" data-on={personalizado ? "1" : "0"} onClick={() => setPersonalizado(!personalizado)} style={{ padding: "6px 11px" }}>personalizado</button>
-        </div>
       </div>
-      {personalizado && (
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+        {[["hoje", "Hoje"], ["7d", "7d"], ["14d", "14d"], ["30d", "30d"]].map(([p, lb]) => (
+          <button key={p} className="chip" data-on={preset === p ? "1" : "0"} onClick={() => aplicarPreset(p)} style={{ padding: "6px 11px" }}>{lb}</button>
+        ))}
+        <button className="chip" data-on={preset === "personalizado" ? "1" : "0"} onClick={() => setPreset("personalizado")} style={{ padding: "6px 11px" }}>personalizado</button>
+      </div>
+      {preset === "personalizado" && (
         <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16 }}>
           <span className="eb">de</span>
-          <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
-          <span className="eb">até hoje</span>
+          <input type="date" value={dataInicio} max={dataFim} onChange={(e) => setDataInicio(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+          <span className="eb">até</span>
+          <input type="date" value={dataFim} min={dataInicio} onChange={(e) => setDataFim(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
         </div>
       )}
 
@@ -3171,46 +3274,29 @@ function Ajustes({ data, cfg, persist, flash }) {
         <div style={{ padding: "12px 0 4px" }}>
           <span className="eb" style={{ fontWeight: 700 }}>Medicamentos</span>
         </div>
-        <MedicamentosStrip lista={cfg.medicamentos} historico={data.medicamentoHistorico || {}}
+        <ItemDoseStrip titulo="Medicamentos" icone="💊" novoNome="Novo medicamento"
+          lista={cfg.medicamentos} historico={data.medicamentoHistorico || {}}
           onLista={(l) => set({ medicamentos: l })}
-          onDose={(medId, entrada) => {
-            const atual = (data.medicamentoHistorico && data.medicamentoHistorico[medId]) || [];
-            const novo = [...atual.filter((h) => h.data !== entrada.data), entrada].sort((a, b) => a.data.localeCompare(b.data));
-            persist({ ...data, medicamentoHistorico: { ...(data.medicamentoHistorico || {}), [medId]: novo } });
-          }} />
-        <div className="eb" style={{ marginTop: 4, lineHeight: 1.5 }}>Toda alteração de dose fica no histórico, com a data em que passou a valer. Isso entra nas Tendências do Histórico, cruzável com as marcações diárias.</div>
+          onDose={(id, novoHist) => persist({ ...data, medicamentoHistorico: { ...(data.medicamentoHistorico || {}), [id]: novoHist } })} />
+        <div className="eb" style={{ marginTop: 4, lineHeight: 1.5 }}>Toda "nova dose" fica registrada no histórico, com a data em que passou a valer — inclusive periodicidade e regra de exceção. Isso entra nas Tendências do Histórico.</div>
       </div>
 
       <div className="card" style={{ padding: "6px 15px 15px", marginBottom: 11 }}>
-        <div className="row" style={{ padding: "12px 0 8px" }}>
+        <div style={{ padding: "12px 0 4px" }}>
           <span className="eb" style={{ fontWeight: 700 }}>Suplementos</span>
-          <button className="mini" style={{ color: "var(--coral-d)" }}
-            onClick={() => set({ supps: [...cfg.supps, { id: uid(), nome: "Novo item", cadaDias: 1, ancora: iso(new Date()) }] })}>
-            + novo
-          </button>
         </div>
-        {cfg.supps.map((s, i) => (
-          <div key={s.id} className="item">
-            <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-              <input value={s.nome} style={{ flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 600 }}
-                onChange={(e) => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, nome: e.target.value } : z)) })} />
-              <button className="mini" onClick={() => set({ supps: cfg.supps.filter((_, k) => k !== i) })}>✕</button>
-            </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-              <span className="eb" style={{ whiteSpace: "nowrap", fontWeight: 700 }}>a cada</span>
-              <input className="num" inputMode="numeric" value={s.cadaDias || 1} style={{ width: 48, padding: "8px 4px", fontSize: 14, fontWeight: 700, textAlign: "center" }}
-                onChange={(e) => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, cadaDias: Math.max(1, n0(e.target.value.replace(/\D/g, "")) || 1) } : z)) })} />
-              <span className="eb" style={{ fontWeight: 700 }}>dias, a partir de</span>
-              <input type="date" value={s.ancora || ""} style={{ padding: "7px 8px", fontSize: 13, flex: 1, minWidth: 130 }}
-                onChange={(e) => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, ancora: e.target.value } : z)) })} />
-              <button className="chip" data-on={s.ancora ? "0" : "1"}
-                onClick={() => set({ supps: cfg.supps.map((z, k) => (k === i ? { ...z, ancora: z.ancora ? "" : iso(new Date()) } : z)) })}>
-                {s.ancora ? "pausar" : "inativo — reativar"}
-              </button>
-            </div>
-          </div>
-        ))}
-        <div className="eb" style={{ marginTop: 10, lineHeight: 1.5 }}>A data ao lado é quando a periodicidade começa a contar — mude-a se precisar recalcular os dias certos.</div>
+        <ItemDoseStrip titulo="Suplementos" icone="💪" novoNome="Novo suplemento"
+          lista={cfg.supps} historico={data.suplementoHistorico || {}}
+          onLista={(l) => set({ supps: l })}
+          onDose={(id, novoHist) => persist({ ...data, suplementoHistorico: { ...(data.suplementoHistorico || {}), [id]: novoHist } })} />
+        <div className="eb" style={{ marginTop: 4, lineHeight: 1.5 }}>Mesma lógica dos medicamentos: cada "nova dose" registra dose, periodicidade e regra de exceção, com histórico completo.</div>
+      </div>
+
+      <div className="card" style={{ padding: "6px 15px 15px", marginBottom: 11 }}>
+        <div style={{ padding: "12px 0 4px" }}>
+          <span className="eb" style={{ fontWeight: 700 }}>Humor — marcadores diários</span>
+        </div>
+        <Marcadores lista={cfg.marcadores} valores={{}} onValor={() => {}} onLista={(l) => set({ marcadores: l })} />
       </div>
 
       <div className="card" style={{ padding: 16 }}>
