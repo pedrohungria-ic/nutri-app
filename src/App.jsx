@@ -213,6 +213,11 @@ const CSS = `
 --violet:#7B61FF;--violet-d:#5138D6;--violet-s:#EDE9FF;
 background:var(--bg);color:var(--ink);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
 min-height:100%;padding:14px 14px 88px;-webkit-font-smoothing:antialiased;position:relative;letter-spacing:-.01em}
+.nx{max-width:480px;margin:0 auto}
+@media (min-width:540px){
+  .nx{box-shadow:0 0 0 1px var(--rule),0 12px 40px rgba(27,37,89,.08);min-height:100vh}
+  body{background:#E4E7EF}
+}
 .nx *{box-sizing:border-box}
 .nx .num{font-variant-numeric:tabular-nums}
 .nx .eb{font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--ink2)}
@@ -229,6 +234,12 @@ border-radius:999px;box-shadow:0 4px 14px rgba(245,56,93,.32);font-weight:600;fo
 .nx .hero:active{transform:scale(.985)}
 .nx .hero[data-on="1"]{background:var(--ink);box-shadow:0 4px 14px rgba(27,37,89,.3)}
 .nx .heroIcon{width:44px;height:44px;border-radius:999px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto}
+
+.nx .fab{position:fixed;right:20px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:45;
+width:56px;height:56px;border-radius:999px;background:var(--coral);color:#fff;font-size:26px;line-height:1;
+display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(245,56,93,.4)}
+.nx .fab:active{transform:scale(.94)}
+@media (min-width:540px){.nx .fab{right:calc(50% - 240px + 20px)}}
 
 .nx .strip{background:var(--card);border-radius:14px;padding:10px 13px;margin-bottom:12px;box-shadow:0 1px 2px rgba(27,37,89,.05)}
 .nx .stripBtn{width:100%;background:transparent;padding:0;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -247,6 +258,9 @@ border-radius:999px;box-shadow:0 4px 14px rgba(245,56,93,.32);font-weight:600;fo
 .nx .item{border-top:1px solid var(--rule);padding:10px 0}
 .nx .ribbon{display:flex;height:100%;border-radius:999px;overflow:hidden}
 .nx .sheet{position:fixed;inset:0;background:var(--bg);z-index:60;padding:14px 14px 30px;overflow-y:auto}
+@media (min-width:540px){
+  .nx .sheet{left:50%;right:auto;transform:translateX(-50%);width:480px;box-shadow:0 0 0 1px var(--rule),0 12px 40px rgba(27,37,89,.12)}
+}
 .nx .chip{background:#fff;border:1.5px solid var(--rule);padding:7px 12px;font-size:12.5px;white-space:nowrap;font-weight:600;border-radius:999px;color:var(--ink2)}
 .nx .chip[data-on="1"]{background:var(--coral-s);color:var(--coral-d);border-color:var(--coral-s)}
 .nx .star{background:transparent;padding:4px 6px;font-size:16px;line-height:1;color:var(--ink3)}
@@ -257,6 +271,9 @@ border-radius:999px;box-shadow:0 4px 14px rgba(245,56,93,.32);font-weight:600;fo
 .nx .menu button{display:block;width:100%;text-align:left;background:transparent;padding:11px 12px;font-size:13.5px;border-radius:9px;font-weight:500}
 .nx .nav{position:fixed;left:0;right:0;bottom:0;z-index:40;background:#fff;display:flex;
 box-shadow:0 -2px 14px rgba(27,37,89,.08);padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+@media (min-width:540px){
+  .nx .nav{left:50%;right:auto;transform:translateX(-50%);width:480px;box-shadow:0 -2px 14px rgba(27,37,89,.08),0 0 0 1px var(--rule)}
+}
 .nx .nav button{flex:1;background:transparent;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--ink3);font-size:10.5px;font-weight:600}
 .nx .nav button[data-on="1"]{color:var(--coral)}
 @media (prefers-reduced-motion:reduce){.nx .fill{transition:none}}
@@ -420,6 +437,8 @@ export default function Nutri() {
           <Marcadores lista={cfg.marcadores} valores={dia.marcadores || {}}
             onValor={(id, v) => setDia({ marcadores: { ...(dia.marcadores || {}), [id]: v } })}
             onLista={(l) => persist({ ...data, config: { ...cfg, marcadores: l } })} />
+
+          <button className="fab" onClick={() => setSheet({ mealId: null })} aria-label="Adicionar alimento">+</button>
         </>
       )}
 
@@ -485,8 +504,8 @@ export default function Nutri() {
       )}
 
       {sheet && (
-        <FoodSheet data={data} onClose={() => setSheet(null)} onFav={toggleFav}
-          onAdd={(itens) => { addItens(sheet.mealId, itens); setSheet(null); }}
+        <FoodSheet data={data} meals={dia.meals} onClose={() => setSheet(null)} onFav={toggleFav}
+          onAdd={(itens, mealIdResolvido) => { addItens(mealIdResolvido || sheet.mealId, itens); setSheet(null); }}
           onCustom={(f) => persist({ ...data, custom: [f, ...(data.custom || [])] })}
           meal={dia.meals.find((m) => m.id === sheet.mealId)} />
       )}
@@ -1407,7 +1426,7 @@ Só JSON, sem markdown:
 }
 
 /* ---------- painel de alimentos ---------- */
-function FoodSheet({ data, meal, onClose, onAdd, onFav, onCustom }) {
+function FoodSheet({ data, meal, meals, onClose, onAdd, onFav, onCustom }) {
   const [modo, setModo] = useState("buscar");
   const [q, setQ] = useState("");
   const [ean, setEan] = useState("");
@@ -1418,7 +1437,11 @@ function FoodSheet({ data, meal, onClose, onAdd, onFav, onCustom }) {
   const [erro, setErro] = useState("");
   const [proc, setProc] = useState(false);
   const [rapido, setRapido] = useState({ nome: "", kcal: "", prot: "", carb: "", gord: "" });
+  const [mealAlvoId, setMealAlvoId] = useState(meal ? meal.id : null);
   const fileRef = useRef(null);
+
+  const mealAlvo = meal || (meals || []).find((m) => m.id === mealAlvoId) || null;
+  const precisaEscolherRefeicao = !meal && !mealAlvoId;
 
   const favs = data.favs || [], custom = data.custom || [], recentes = data.recentes || [];
   const local = useMemo(() => {
@@ -1516,9 +1539,20 @@ function FoodSheet({ data, meal, onClose, onAdd, onFav, onCustom }) {
   return (
     <div className="sheet">
       <div className="row" style={{ marginBottom: 14 }}>
-        <span style={{ fontSize: 17, fontWeight: 700 }}>{meal ? meal.nome : "Adicionar"}</span>
+        <span style={{ fontSize: 17, fontWeight: 700 }}>{mealAlvo ? mealAlvo.nome : "Adicionar alimento"}</span>
         <button className="ghost" onClick={onClose}>fechar</button>
       </div>
+
+      {!meal && meals && meals.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div className="eb" style={{ marginBottom: 7, fontWeight: 700 }}>Em qual refeição?</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {meals.map((m) => (
+              <button key={m.id} className="chip" data-on={mealAlvoId === m.id ? "1" : "0"} onClick={() => setMealAlvoId(m.id)}>{m.nome}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 11, marginBottom: 11 }}>
         {[["buscar", "Buscar"], ["fav", "Favoritos"], ["rec", "Recentes"], ["rapido", "Rápido"], ["codigo", "Código"]].map(([k, v]) => (
@@ -1548,7 +1582,13 @@ function FoodSheet({ data, meal, onClose, onAdd, onFav, onCustom }) {
             <span className="num" style={{ fontSize: 16, fontWeight: 800 }}>{fmt(preview.kcal)}</span>
             <Pills m={preview} />
           </div>
-          <button className="cta" onClick={() => onAdd([{ ...sel, id: uid(), g: Number(g) || 0 }])}>Adicionar</button>
+          {precisaEscolherRefeicao ? (
+            <div className="eb" style={{ textAlign: "center", padding: "8px 0", color: "var(--coral-d)" }}>Escolha a refeição acima para adicionar</div>
+          ) : (
+            <button className="cta" onClick={() => onAdd([{ ...sel, id: uid(), g: Number(g) || 0 }], mealAlvoId || (meal && meal.id))}>
+              Adicionar em {mealAlvo ? mealAlvo.nome : ""}
+            </button>
+          )}
         </div>
       )}
 
