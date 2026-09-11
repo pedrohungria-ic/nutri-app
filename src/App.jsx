@@ -385,9 +385,6 @@ export default function Nutri() {
     persist({ ...data, favs: on ? data.favs.filter((x) => x.nome !== f.nome) : [...(data.favs || []), { ...c, id: uid() }] });
   }
 
-  if (!data) return <div className="nx"><style>{CSS}</style><div className="eb">Carregando…</div></div>;
-  const shift = (k) => { const d = fromIso(day); d.setDate(d.getDate() + k); setDay(iso(d)); };
-
   useEffect(() => {
     if (tab !== "dia") { setCondensado(false); return; }
     const aoRolar = () => setCondensado(window.scrollY > 170);
@@ -395,6 +392,9 @@ export default function Nutri() {
     aoRolar();
     return () => window.removeEventListener("scroll", aoRolar);
   }, [tab]);
+
+  if (!data) return <div className="nx"><style>{CSS}</style><div className="eb">Carregando…</div></div>;
+  const shift = (k) => { const d = fromIso(day); d.setDate(d.getDate() + k); setDay(iso(d)); };
 
   return (
     <div className="nx">
