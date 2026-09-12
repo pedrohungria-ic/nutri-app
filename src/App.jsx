@@ -455,13 +455,25 @@ export default function Nutri() {
       {tab === "dia" && (
         <>
           <div className="congelado">
-            <div className="row" style={{ position: "relative", marginBottom: 10 }}>
-              <button onClick={() => setUserMenu(!userMenu)} style={{ display: "flex", alignItems: "center", gap: 10, background: "transparent", padding: 0 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 999, background: "var(--coral-s)", color: "var(--coral-d)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, overflow: "hidden", flex: "0 0 auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, position: "relative", flexWrap: "wrap", rowGap: 8 }}>
+              <button onClick={() => setUserMenu(!userMenu)} style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", padding: 0, flex: "0 0 auto" }}>
+                <div style={{ width: 32, height: 32, borderRadius: 999, background: "var(--coral-s)", color: "var(--coral-d)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, overflow: "hidden", flex: "0 0 auto" }}>
                   {fotoHeader ? <img src={fotoHeader} alt="Pedro" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "P"}
                 </div>
-                <div style={{ fontSize: 17, fontWeight: 700 }}>Olá, Pedro</div>
+                <span style={{ fontSize: 14.5, fontWeight: 700, whiteSpace: "nowrap" }}>Olá, Pedro</span>
               </button>
+
+              <button onClick={() => setModeloOpen(true)} style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--card)", borderRadius: 999, padding: "6px 10px", boxShadow: "0 1px 2px rgba(27,37,89,.06)", flex: "0 0 auto" }}>
+                <span className="eb" style={{ fontSize: 10 }}>Dieta</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700 }}>{cfg.refeicoesModelos.find((r) => r.id === modeloHojeId)?.nome || "Dieta"}</span>
+              </button>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", flex: "0 0 auto" }}>
+                <button className="mini" onClick={() => shift(-1)} aria-label="Dia anterior">←</button>
+                <span style={{ fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{label(day)}</span>
+                <button className="mini" onClick={() => shift(1)} aria-label="Próximo dia">→</button>
+              </div>
+
               {userMenu && (
                 <div className="menu" style={{ top: "100%", left: 0, right: "auto" }} onMouseLeave={() => setUserMenu(false)}>
                   <button onClick={() => { setUserMenu(false); setTab("perfil"); }}>Ver perfil</button>
@@ -469,17 +481,6 @@ export default function Nutri() {
                 </div>
               )}
             </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <button className="ghost" style={{ padding: "8px 11px" }} onClick={() => shift(-1)} aria-label="Dia anterior">←</button>
-              <span style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: 700 }}>{label(day)}</span>
-              <button className="ghost" style={{ padding: "8px 11px" }} onClick={() => shift(1)} aria-label="Próximo dia">→</button>
-            </div>
-
-            <button onClick={() => setModeloOpen(true)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "var(--card)", borderRadius: 12, padding: "10px 13px", marginBottom: 10, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
-              <span className="eb">Dieta de hoje</span>
-              <span style={{ fontSize: 13.5, fontWeight: 700 }}>{cfg.refeicoesModelos.find((r) => r.id === modeloHojeId)?.nome || "Dieta"}</span>
-            </button>
 
             <PainelTopo
               pesos={data.pesos || {}} day={day}
@@ -524,10 +525,12 @@ export default function Nutri() {
             />
 
             <LinhaMacros tot={tot} cfg={metaHoje} />
+
+            <CardAgua ml={dia.agua || 0} meta={refModeloPadrao.metaAgua || 2500}
+              onAlterar={(delta) => setDia({ agua: Math.max(0, (dia.agua || 0) + delta) })} />
           </div>
 
-          <CardAgua ml={dia.agua || 0} meta={refModeloPadrao.metaAgua || 2500}
-            onAlterar={(delta) => setDia({ agua: Math.max(0, (dia.agua || 0) + delta) })} />
+          <div style={{ height: 20, borderBottom: "1px solid var(--rule)", marginBottom: 20 }} />
 
           {dia.meals.map((m) => (
             <MealCard
@@ -1044,37 +1047,13 @@ const CSS_STICKY = `
 .nx .stickyTable .grupo td{background:var(--bg);font-weight:700;color:var(--ink2);font-size:10px;text-transform:uppercase;letter-spacing:.04em;position:static;box-shadow:none}
 `;
 
-function SecaoPeso({ pesos, dataInicio, dataFim, onSetPesoData }) {
-  const [aberto, setAberto] = useState(false);
-  const [dt, setDt] = useState(iso(new Date()));
-  const [val, setVal] = useState("");
-
+function SecaoPeso({ pesos, dataInicio, dataFim }) {
   const datas = Object.keys(pesos).filter((d) => d >= dataInicio && d <= dataFim).sort();
   const chartData = datas.map((d) => ({ data: label(d).slice(0, 6), kg: pesos[d] }));
 
-  function salvar() {
-    if (!val) return;
-    onSetPesoData(dt, Number(val));
-    setVal(""); setAberto(false);
-  }
-
   return (
     <div style={{ marginBottom: 18 }}>
-      <div className="row" style={{ marginBottom: 10 }}>
-        <span style={{ fontSize: 15, fontWeight: 800 }}>⚖️ Evolução do peso</span>
-        <button className="mini" style={{ color: "var(--coral-d)", fontWeight: 700 }} onClick={() => setAberto(!aberto)}>{aberto ? "cancelar" : "+ novo peso"}</button>
-      </div>
-
-      {aberto && (
-        <div className="card" style={{ padding: 13, marginBottom: 10 }}>
-          <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
-            <input type="date" value={dt} onChange={(e) => setDt(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
-            <input className="num" inputMode="decimal" placeholder="kg" value={val}
-              onChange={(e) => setVal(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))} style={{ width: 90, textAlign: "center", fontWeight: 700 }} />
-          </div>
-          <button className="cta" onClick={salvar} disabled={!val}>Salvar</button>
-        </div>
-      )}
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>⚖️ Evolução de peso</div>
 
       {chartData.length >= 2 && (
         <div className="card" style={{ padding: 14, marginBottom: 10 }}>
@@ -1115,8 +1094,8 @@ function SecaoPeso({ pesos, dataInicio, dataFim, onSetPesoData }) {
   );
 }
 
-function MedicoesTabela({ medicoes, dataInicio, dataFim }) {
-  const datas = Object.keys(medicoes).filter((d) => d >= dataInicio && d <= dataFim).sort();
+function MedicoesTabela({ medicoes }) {
+  const datas = Object.keys(medicoes).sort();
   const campos = MEDIDAS_CAMPOS.filter((c) => datas.some((d) => medicoes[d][c.key] != null));
   if (!datas.length) return <div className="eb" style={{ padding: "10px 0" }}>Nenhuma medição no período.</div>;
   return (
@@ -1136,8 +1115,8 @@ function MedicoesTabela({ medicoes, dataInicio, dataFim }) {
   );
 }
 
-function ExamesTabela({ campos, exames, dataInicio, dataFim }) {
-  const datas = Object.keys(exames).filter((d) => d >= dataInicio && d <= dataFim).sort();
+function ExamesTabela({ campos, exames }) {
+  const datas = Object.keys(exames).sort();
   if (!datas.length || !campos.length) return <div className="eb" style={{ padding: "10px 0" }}>Nenhum exame no período.</div>;
   const grupos = {};
   campos.forEach((c) => {
@@ -1302,19 +1281,25 @@ function MealCard({ meal, clip, onAdd, onVoz, onSugerir, onPatch, onCopy, onPast
   const over = a && a.kcal && t.kcal > a.kcal * 1.05;
   const setAlvo = (f, v) => onPatch({ alvo: { kcal: 0, prot: 0, carb: 0, gord: 0, ...a, [f]: n0(v) } });
 
+  const Mini = ({ icone, titulo, v, meta, cor }) => (
+    <div style={{ flex: 1, background: "var(--bg)", borderRadius: 10, padding: "7px 5px", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+      <span style={{ fontSize: 13 }}>{icone}</span>
+      <span style={{ fontSize: 8.5, fontWeight: 700, color: "var(--ink2)" }}>{titulo}</span>
+      <span className="num" style={{ fontSize: 9.5, fontWeight: 800, color: cor || "var(--ink)" }}>{fmt(v)}{meta ? `/${fmt(meta)}` : ""}</span>
+    </div>
+  );
+
   if (!aberto) {
     return (
       <button className="card" onClick={() => setAberto(true)}
-        style={{ width: "100%", padding: "12px 15px", marginBottom: 9, textAlign: "left", background: "var(--card)" }}>
-        <div className="row" style={{ alignItems: "flex-start" }}>
-          <div>
-            <div style={{ fontSize: 14.5, fontWeight: 700 }}>{meal.nome}</div>
-            <div className="eb num" style={{ marginTop: 3 }}>{meal.hora || "—"}</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="eb" style={{ fontWeight: 600 }}>meta {a && a.kcal ? `${fmt(a.kcal)} kcal` : "—"}</div>
-            <div className="num" style={{ fontSize: 15, fontWeight: 800, marginTop: 3, color: over ? "var(--coral-d)" : "var(--ink)" }}>{fmt(t.kcal)} kcal</div>
-          </div>
+        style={{ width: "100%", padding: "13px 15px", marginBottom: 9, textAlign: "left", background: "var(--card)" }}>
+        <div className="row" style={{ marginBottom: 9 }}>
+          <span style={{ fontSize: 14.5, fontWeight: 700 }}>{meal.nome}</span>
+          <span className="num" style={{ fontSize: 13, fontWeight: 700, color: "var(--ink2)" }}>{meal.hora || "—"}</span>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <Mini icone="🔥" titulo="Kcal" v={t.kcal} meta={a && a.kcal} cor={over ? "var(--coral-d)" : "var(--ink)"} />
+          {MACROS.map((x) => <Mini key={x.k} icone={x.icone} titulo={x.nome} v={t[x.k]} meta={a && a[x.k]} cor={x.txt} />)}
         </div>
       </button>
     );
@@ -2150,10 +2135,10 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
         </div>
       )}
 
-      <SecaoPeso pesos={data.pesos || {}} dataInicio={dataInicio} dataFim={dataFim} onSetPesoData={onSetPesoData} />
+      <SecaoPeso pesos={data.pesos || {}} dataInicio={dataInicio} dataFim={dataFim} />
 
       <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🍽️ Histórico de alimentação</div>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🍽️ Evolução de alimentação</div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginBottom: 10 }}>
           {cards.map((c) => (
@@ -2209,24 +2194,30 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
       </div>
 
       <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>📏 Histórico de medições</div>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>📏 Evolução de medidas</div>
         <MedicoesPanel medicoes={data.medicoes || {}} altura={data.altura} onAltura={onAltura}
           onSalvar={(dataChave, valores) => onSalvarMedicao(dataChave, valores)} />
         <div style={{ marginTop: 10 }}>
-          <MedicoesTabela medicoes={data.medicoes || {}} dataInicio={dataInicio} dataFim={dataFim} />
+          <MedicoesTabela medicoes={data.medicoes || {}} />
         </div>
       </div>
 
       <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🧪 Histórico de exames</div>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🧪 Evolução de exames</div>
         <ExamesPanel campos={data.examesCampos || []} exames={data.exames || {}} contextos={data.exameContexto || {}}
           onCampos={onExamesCampos} onSalvar={onSalvarExame} onContexto={onExameContexto} />
         <div style={{ marginTop: 10 }}>
-          <ExamesTabela campos={data.examesCampos || []} exames={data.exames || {}} dataInicio={dataInicio} dataFim={dataFim} />
+          <ExamesTabela campos={data.examesCampos || []} exames={data.exames || {}} />
         </div>
       </div>
 
-      <FotosPanel fotosIndex={data.fotosIndex || {}} onIndex={onFotosIndex} />
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>📸 Evolução de fotografias</div>
+        <FotosPanel fotosIndex={data.fotosIndex || {}} onIndex={onFotosIndex} />
+      </div>
+
+      <div style={{ height: 1, background: "var(--rule)", margin: "6px 0 18px" }} />
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>📊 Análise gráfica</div>
 
       <Tendencias dias={dias} ativos={ativos} setAtivos={setAtivos} temMedidas={Object.keys(data.medicoes || {}).length > 0}
         examesCampos={data.examesCampos || []} marcadores={cfg.marcadores || []} medicamentos={cfg.medicamentos || []}
@@ -3041,6 +3032,7 @@ function Perfil({ data, cfg, refModeloPadrao, persist }) {
   const [foto, setFoto] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [alturaVal, setAlturaVal] = useState(data.altura ? String(data.altura) : "");
+  const [editandoAltura, setEditandoAltura] = useState(false);
   const [verFotos, setVerFotos] = useState(null);
   const [thumbs, setThumbs] = useState({});
   const [email, setEmail] = useState("");
@@ -3116,11 +3108,21 @@ function Perfil({ data, cfg, refModeloPadrao, persist }) {
             <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Pedro Hungria</div>
             <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 7 }}>
               <span className="eb" style={{ whiteSpace: "nowrap" }}>altura</span>
-              <input className="num" inputMode="numeric" placeholder="cm" value={alturaVal}
-                onChange={(e) => setAlturaVal(e.target.value.replace(/\D/g, ""))}
-                onBlur={() => alturaVal && Number(alturaVal) !== data.altura && persist({ ...data, altura: Number(alturaVal) })}
-                style={{ width: 56, padding: "5px 7px", fontSize: 12.5, textAlign: "center" }} />
-              <span className="eb">cm</span>
+              {editandoAltura ? (
+                <>
+                  <input className="num" inputMode="numeric" placeholder="cm" value={alturaVal}
+                    onChange={(e) => setAlturaVal(e.target.value.replace(/\D/g, ""))}
+                    style={{ width: 56, padding: "5px 7px", fontSize: 12.5, textAlign: "center" }} />
+                  <span className="eb">cm</span>
+                  <button className="mini" style={{ color: "var(--lime-d)" }}
+                    onClick={() => { if (alturaVal) persist({ ...data, altura: Number(alturaVal) }); setEditandoAltura(false); }}>✓</button>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: 12.5, fontWeight: 700 }}>{data.altura ? `${data.altura} cm` : "não definida"}</span>
+                  <button className="mini" onClick={() => setEditandoAltura(true)} aria-label="Editar altura">✏️</button>
+                </>
+              )}
             </div>
             <div className="eb" style={{ marginBottom: 8 }}>{email || "carregando…"}</div>
             <button className="ghost" style={{ padding: "6px 12px", fontSize: 11.5 }} onClick={() => setSenhaAberta(true)}>🔒 Trocar senha</button>
