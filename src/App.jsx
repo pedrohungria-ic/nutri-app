@@ -2202,7 +2202,7 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
         </div>
       )}
 
-      <SecaoPeso pesos={data.pesos || {}} janela={janela} onSetPesoData={onSetPesoData} />
+      <SecaoPeso pesos={data.pesos || {}} dataInicio={dataInicio} dataFim={dataFim} onSetPesoData={onSetPesoData} />
 
       <div style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🍽️ Histórico de alimentação</div>
@@ -2233,7 +2233,7 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
             return (
               <button key={d.key} onClick={() => onPick(d.key)}
                 style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", borderTop: "1px solid var(--rule)", borderRadius: 0, padding: "11px 0" }}>
-                <div className="row" style={{ marginBottom: 7 }}>
+                <div className="row" style={{ marginBottom: 6 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     <span style={{ fontSize: 12.5, fontWeight: 600 }}>{label(d.key)}</span>
                     {d.temMedida && <span title="medição registrada" style={{ fontSize: 10 }}>📏</span>}
@@ -2245,11 +2245,16 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
                         {n0(d.pctMeta)}% da meta
                       </span>
                     )}
-                    <span className="num" style={{ fontSize: 12, color: d.vazio ? "var(--ink3)" : "var(--ink)", fontWeight: d.vazio ? 500 : 700 }}>
-                      {d.vazio ? "—" : `${fmt(d.kcal)} kcal`}
+                    <span className="num" style={{ fontSize: 13, color: d.vazio ? "var(--ink3)" : "var(--ink)", fontWeight: d.vazio ? 500 : 800 }}>
+                      {d.vazio ? "—" : `${fmt(d.kcal)}${d.metaDia.kcal ? `/${fmt(d.metaDia.kcal)}` : ""} kcal`}
                     </span>
                   </div>
                 </div>
+                {!d.vazio && (
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 7 }}>
+                    <Pills m={{ carb: d.carb, prot: d.prot, gord: d.gord }} metas={{ carb: d.metaDia.carb, prot: d.metaDia.prot, gord: d.metaDia.gord }} />
+                  </div>
+                )}
                 <div style={{ height: 9, background: "var(--rule)", borderRadius: 999 }}>
                   <div className="ribbon" style={{ width: `${(d.kcal / max) * 100}%` }}>
                     <div style={{ width: `${(kp / soma) * 100}%`, background: "var(--lime)" }} />
@@ -2271,7 +2276,7 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
         <MedicoesPanel medicoes={data.medicoes || {}} altura={data.altura} onAltura={onAltura}
           onSalvar={(dataChave, valores) => onSalvarMedicao(dataChave, valores)} />
         <div style={{ marginTop: 10 }}>
-          <MedicoesTabela medicoes={data.medicoes || {}} janela={janela} />
+          <MedicoesTabela medicoes={data.medicoes || {}} dataInicio={dataInicio} dataFim={dataFim} />
         </div>
       </div>
 
@@ -2280,7 +2285,7 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
         <ExamesPanel campos={data.examesCampos || []} exames={data.exames || {}} contextos={data.exameContexto || {}}
           onCampos={onExamesCampos} onSalvar={onSalvarExame} onContexto={onExameContexto} />
         <div style={{ marginTop: 10 }}>
-          <ExamesTabela campos={data.examesCampos || []} exames={data.exames || {}} janela={janela} />
+          <ExamesTabela campos={data.examesCampos || []} exames={data.exames || {}} dataInicio={dataInicio} dataFim={dataFim} />
         </div>
       </div>
 
@@ -3101,6 +3106,23 @@ function Perfil({ data, cfg, refModeloPadrao, persist }) {
   const [alturaVal, setAlturaVal] = useState(data.altura ? String(data.altura) : "");
   const [verFotos, setVerFotos] = useState(null);
   const [thumbs, setThumbs] = useState({});
+  const [email, setEmail] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confSenha, setConfSenha] = useState("");
+  const [statusSenha, setStatusSenha] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: d }) => setEmail(d?.user?.email || ""));
+  }, []);
+
+  async function trocarSenha() {
+    setStatusSenha("");
+    if (novaSenha.length < 6) { setStatusSenha("A senha precisa ter pelo menos 6 caracteres."); return; }
+    if (novaSenha !== confSenha) { setStatusSenha("As duas senhas não são iguais."); return; }
+    const { error } = await supabase.auth.updateUser({ password: novaSenha });
+    if (error) setStatusSenha("Não foi possível trocar a senha agora.");
+    else { setStatusSenha("Senha alterada com sucesso."); setNovaSenha(""); setConfSenha(""); }
+  }
 
   useEffect(() => {
     (async () => {
@@ -3135,16 +3157,18 @@ function Perfil({ data, cfg, refModeloPadrao, persist }) {
     <>
       <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 14 }}>Perfil</div>
 
-      <div className="card" style={{ padding: 18, marginBottom: 11, textAlign: "center" }}>
-        <label style={{ display: "inline-block", cursor: "pointer" }}>
-          <div style={{ width: 92, height: 92, borderRadius: 999, margin: "0 auto 10px", background: "var(--coral-s)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", border: "2px solid var(--rule)" }}>
-            {!carregando && foto ? <img src={foto} alt="Perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 30, fontWeight: 800, color: "var(--coral-d)" }}>P</span>}
+      <div className="card" style={{ padding: 18, marginBottom: 11, display: "flex", alignItems: "center", gap: 16 }}>
+        <label style={{ display: "block", cursor: "pointer", flex: "0 0 auto" }}>
+          <div style={{ width: 76, height: 76, borderRadius: 999, background: "var(--coral-s)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", border: "2px solid var(--rule)" }}>
+            {!carregando && foto ? <img src={foto} alt="Perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 26, fontWeight: 800, color: "var(--coral-d)" }}>P</span>}
           </div>
           <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => e.target.files && e.target.files[0] && trocarFoto(e.target.files[0])} />
-          <span className="eb" style={{ color: "var(--coral-d)", fontWeight: 700 }}>{foto ? "trocar foto" : "adicionar foto"}</span>
+          <div className="eb" style={{ color: "var(--coral-d)", fontWeight: 700, marginTop: 6, textAlign: "center" }}>{foto ? "trocar" : "adicionar"}</div>
         </label>
-        <div style={{ fontSize: 17, fontWeight: 700, marginTop: 10 }}>Pedro</div>
-        <div className="eb" style={{ marginTop: 3 }}>{ultimoPeso != null ? `${n1(ultimoPeso)} kg` : "peso não registrado"}{data.altura ? ` · ${data.altura} cm` : ""}</div>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>Pedro Hungria</div>
+          <div className="eb" style={{ marginTop: 4 }}>{ultimoPeso != null ? `${n1(ultimoPeso)} kg` : "peso não registrado"}{data.altura ? ` · ${data.altura} cm` : ""}</div>
+        </div>
       </div>
 
       <div className="card" style={{ padding: 15, marginBottom: 11 }}>
@@ -3164,6 +3188,22 @@ function Perfil({ data, cfg, refModeloPadrao, persist }) {
           <Pills m={metaTotal} />
         </div>
       </div>
+
+      <div className="card" style={{ padding: 15, marginBottom: 11 }}>
+        <div className="eb" style={{ fontWeight: 700, marginBottom: 9 }}>Conta</div>
+        <div style={{ marginBottom: 12 }}>
+          <div className="eb" style={{ marginBottom: 4 }}>E-mail</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600 }}>{email || "carregando…"}</div>
+        </div>
+        <div className="eb" style={{ marginBottom: 6, fontWeight: 700 }}>Trocar senha</div>
+        <input type="password" placeholder="nova senha" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} style={{ marginBottom: 7 }} />
+        <input type="password" placeholder="confirmar nova senha" value={confSenha} onChange={(e) => setConfSenha(e.target.value)} style={{ marginBottom: 9 }} />
+        {statusSenha && <div className="eb" style={{ marginBottom: 9, color: statusSenha.includes("sucesso") ? "var(--lime-d)" : "var(--coral-d)" }}>{statusSenha}</div>}
+        <button className="ghost" style={{ width: "100%" }} disabled={!novaSenha || !confSenha} onClick={trocarSenha}>Salvar nova senha</button>
+        <div className="eb" style={{ marginTop: 8, lineHeight: 1.5 }}>Definir uma senha é opcional — você pode continuar entrando só pelo link por e-mail se preferir não usar isso.</div>
+      </div>
+
+      <div className="eb" style={{ margin: "2px 0 11px", lineHeight: 1.5 }}>Notificações e outras configurações do app chegam em breve.</div>
 
       <div className="card" style={{ padding: 15, marginBottom: 11 }}>
         <div className="row" style={{ marginBottom: 9 }}>
@@ -3238,6 +3278,69 @@ function Ajustes({ data, cfg, persist, flash }) {
     a.download = `nutri-${iso(new Date())}.csv`; a.click();
   }
 
+  async function gerarDadosExemplo() {
+    if (!window.confirm("Isso vai adicionar medições, exames e fotos de exemplo (dados fictícios) só pra você ver as telas populadas. Pode fazer isso a qualquer momento, os dados de exemplo somam aos seus dados reais. Continuar?")) return;
+
+    // 8 registros de medição, semanais, com leve tendência
+    const medicoesNovas = { ...(data.medicoes || {}) };
+    for (let s = 7; s >= 0; s--) {
+      const d = new Date(); d.setDate(d.getDate() - s * 7);
+      const key = iso(d);
+      medicoesNovas[key] = {
+        pescoco: n1(38 + Math.random() * 0.6),
+        ombro: n1(118 + Math.random()),
+        peito: n1(102 + (7 - s) * 0.3 + Math.random()),
+        bracoD: n1(36 + (7 - s) * 0.2 + Math.random() * 0.5),
+        bracoE: n1(35.5 + (7 - s) * 0.2 + Math.random() * 0.5),
+        cinturaUmbigo: n1(88 - (7 - s) * 0.4 + Math.random()),
+        quadril: n1(101 + Math.random()),
+        coxaD: n1(58 + Math.random()),
+        coxaE: n1(57.5 + Math.random()),
+        pctGordura: n1(18 - (7 - s) * 0.3 + Math.random() * 0.5),
+      };
+    }
+
+    // 3 datas de exame, cobrindo várias especialidades
+    const nomesExame = [
+      { nome: "AST (TGO)", unidade: "U/L", base: 28 }, { nome: "ALT (TGP)", unidade: "U/L", base: 25 },
+      { nome: "Creatinina", unidade: "mg/dL", base: 1.0 }, { nome: "Ureia", unidade: "mg/dL", base: 32 },
+      { nome: "Testosterona Total", unidade: "ng/dL", base: 650 }, { nome: "Estradiol", unidade: "pg/mL", base: 28 },
+      { nome: "TSH", unidade: "mUI/L", base: 2.1 }, { nome: "Glicose", unidade: "mg/dL", base: 88 },
+      { nome: "Colesterol Total", unidade: "mg/dL", base: 175 },
+    ];
+    let camposNovos = [...(data.examesCampos || [])];
+    const examesNovos = { ...(data.exames || {}) };
+    for (let s = 2; s >= 0; s--) {
+      const d = new Date(); d.setDate(d.getDate() - s * 30);
+      const key = iso(d);
+      const valores = {};
+      nomesExame.forEach((ex) => {
+        const { campos: c2, key: k2 } = acharOuCriarCampo(camposNovos, ex.nome, ex.unidade);
+        camposNovos = c2;
+        valores[k2] = n1(ex.base * (0.94 + Math.random() * 0.12));
+      });
+      examesNovos[key] = { ...(examesNovos[key] || {}), ...valores };
+    }
+
+    // 3 datas de fotos, com imagem de exemplo gerada (sem precisar de câmera)
+    const angulos = ["frontal", "lateral", "costas"];
+    const fotosIndexNovo = { ...(data.fotosIndex || {}) };
+    for (let s = 2; s >= 0; s--) {
+      const d = new Date(); d.setDate(d.getDate() - s * 10);
+      const key = iso(d);
+      const cor = ["6B7FD7", "D77F6B", "7FD79A"][s];
+      for (const ang of angulos) {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420"><rect width="100%" height="100%" fill="#${cor}"/><text x="50%" y="48%" fill="#fff" font-family="sans-serif" font-size="20" text-anchor="middle">Foto de exemplo</text><text x="50%" y="56%" fill="#fff" font-family="sans-serif" font-size="14" text-anchor="middle">${ang} · ${key}</text></svg>`;
+        const dataUrl = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+        try { await window.storage.set(`foto:${key}:${ang}`, dataUrl); } catch { /* segue mesmo se falhar */ }
+      }
+      fotosIndexNovo[key] = angulos;
+    }
+
+    persist({ ...data, medicoes: medicoesNovas, examesCampos: camposNovos, exames: examesNovos, fotosIndex: fotosIndexNovo });
+    flash("Dados de exemplo adicionados — veja no Histórico");
+  }
+
   const setRefs = (lista) => set({ refeicoesModelos: lista });
 
   return (
@@ -3301,7 +3404,11 @@ function Ajustes({ data, cfg, persist, flash }) {
 
       <div className="card" style={{ padding: 16 }}>
         <div className="eb" style={{ margin: "0 0 10px", fontWeight: 700 }}>Seus dados</div>
-        <button className="ghost" style={{ width: "100%", padding: 12 }} onClick={exportar}>Baixar tudo em CSV</button>
+        <button className="ghost" style={{ width: "100%", padding: 12, marginBottom: 9 }} onClick={exportar}>Baixar tudo em CSV</button>
+        <button className="ghost" style={{ width: "100%", padding: 12, color: "var(--violet-d)", borderColor: "var(--violet-s)" }} onClick={gerarDadosExemplo}>
+          🧪 Carregar dados de exemplo
+        </button>
+        <div className="eb" style={{ marginTop: 8, lineHeight: 1.5 }}>Adiciona medições, exames e fotos fictícios, só pra você testar as telas do Histórico populadas.</div>
       </div>
     </>
   );
