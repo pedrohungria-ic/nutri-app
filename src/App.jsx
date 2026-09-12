@@ -231,6 +231,12 @@ const MACROS = [
   { k: "prot", lb: "prot", nome: "Prot", icone: "🥩", cor: "var(--lime)", txt: "var(--lime-d)", bg: "var(--lime-s)" },
   { k: "gord", lb: "gord", nome: "Gord", icone: "🧈", cor: "var(--violet)", txt: "var(--violet-d)", bg: "var(--violet-s)" },
 ];
+const BARRAS_DIA = [
+  { k: "kcal", nome: "Kcal", cor: "var(--coral)", bg: "var(--coral-s)", un: "" },
+  { k: "carb", nome: "Carbo", cor: "var(--orange)", bg: "var(--orange-s)", un: "g" },
+  { k: "prot", nome: "Prot", cor: "var(--lime)", bg: "var(--lime-s)", un: "g" },
+  { k: "gord", nome: "Gord", cor: "var(--violet)", bg: "var(--violet-s)", un: "g" },
+];
 
 const MEDIDAS_CAMPOS = [
   { key: "pescoco", lb: "Pescoço", un: "cm" },
@@ -486,7 +492,6 @@ export default function Nutri() {
 
           {condensado && (
             <BarraCondensada
-              fotoHeader={fotoHeader}
               pesos={data.pesos || {}} day={day}
               medLista={cfg.medicamentos} medMarcados={dia.medicamentos || []} medHistorico={data.medicamentoHistorico || {}}
               suppLista={cfg.supps} suppMarcados={dia.supps || []} suppHistorico={data.suplementoHistorico || {}}
@@ -692,7 +697,7 @@ export default function Nutri() {
 }
 
 /* ---------- suplementos: fino, no topo, expansível, editável ---------- */
-function BarraCondensada({ fotoHeader, pesos, day, medLista, medMarcados, medHistorico, suppLista, suppMarcados, suppHistorico, marcLista, marcValores, tot, cfg }) {
+function BarraCondensada({ pesos, day, medLista, medMarcados, medHistorico, suppLista, suppMarcados, suppHistorico, marcLista, marcValores, tot, cfg }) {
   const medHoje = medLista.filter((m) => itemDue((medHistorico || {})[m.id], day));
   const medFeito = medHoje.filter((m) => medMarcados.includes(m.nome)).length;
   const suppHoje = suppLista.filter((s) => itemDue((suppHistorico || {})[s.id], day));
@@ -709,12 +714,6 @@ function BarraCondensada({ fotoHeader, pesos, day, medLista, medMarcados, medHis
 
   return (
     <div className="condensada">
-      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
-        <div style={{ width: 22, height: 22, borderRadius: 999, overflow: "hidden", background: "var(--coral-s)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "var(--coral-d)", flex: "0 0 auto" }}>
-          {fotoHeader ? <img src={fotoHeader} alt="Pedro" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "P"}
-        </div>
-        <span style={{ fontSize: 12.5, fontWeight: 700 }}>Pedro</span>
-      </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
         <Mini titulo="Peso" valor={pesos[day] != null ? `${n1(pesos[day])}kg` : "—"} />
         <Mini titulo="Meds" valor={`${medFeito}/${medHoje.length}`} />
@@ -1168,57 +1167,55 @@ function SecaoPeso({ pesos, dataInicio, dataFim, onSetPesoData }) {
 }
 
 function MedicoesTabela({ medicoes, dataInicio, dataFim }) {
-  const datas = Object.keys(medicoes).filter((d) => d >= dataInicio && d <= dataFim).sort().reverse();
+  const datas = Object.keys(medicoes).filter((d) => d >= dataInicio && d <= dataFim).sort();
+  const campos = MEDIDAS_CAMPOS.filter((c) => datas.some((d) => medicoes[d][c.key] != null));
   if (!datas.length) return <div className="eb" style={{ padding: "10px 0" }}>Nenhuma medição no período.</div>;
   return (
-    <div className="card" style={{ padding: "4px 15px 8px" }}>
-      {datas.map((d, i) => {
-        const campos = MEDIDAS_CAMPOS.filter((c) => medicoes[d][c.key] != null);
-        if (!campos.length) return null;
-        return (
-          <div key={d} style={{ padding: "11px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>{label(d)}</div>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {campos.map((c) => (
-                <span key={c.key} className="pill" style={{ background: "var(--rule)", color: "var(--ink)" }}>
-                  {c.lb}: {n1(medicoes[d][c.key])}
-                </span>
-              ))}
-            </div>
-          </div>
-        );
-      })}
+    <div className="stickyTable">
+      <table>
+        <thead><tr><th>Medida</th>{datas.map((d) => <th key={d}>{label(d).slice(0, 6)}</th>)}</tr></thead>
+        <tbody>
+          {campos.map((c) => (
+            <tr key={c.key}>
+              <td>{c.lb}</td>
+              {datas.map((d) => <td key={d} className="num">{medicoes[d][c.key] != null ? n1(medicoes[d][c.key]) : "—"}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 function ExamesTabela({ campos, exames, dataInicio, dataFim }) {
-  const datas = Object.keys(exames).filter((d) => d >= dataInicio && d <= dataFim).sort().reverse();
+  const datas = Object.keys(exames).filter((d) => d >= dataInicio && d <= dataFim).sort();
   if (!datas.length || !campos.length) return <div className="eb" style={{ padding: "10px 0" }}>Nenhum exame no período.</div>;
-  const ordem = ["Função Hepática", "Função Renal", "Painel Hormonal", "Perfil Metabólico", "Hemograma", "Outros"];
+  const grupos = {};
+  campos.forEach((c) => {
+    if (!datas.some((d) => exames[d][c.key] != null)) return;
+    const cat = categorizarExame(c.nome);
+    (grupos[cat] = grupos[cat] || []).push(c);
+  });
+  const ordem = ["Função Hepática", "Função Renal", "Painel Hormonal", "Perfil Metabólico", "Hemograma", "Outros"].filter((g) => grupos[g]);
+  if (!ordem.length) return <div className="eb" style={{ padding: "10px 0" }}>Nenhum exame no período.</div>;
   return (
-    <div className="card" style={{ padding: "4px 15px 8px" }}>
-      {datas.map((d, i) => {
-        const valores = campos.filter((c) => exames[d][c.key] != null);
-        if (!valores.length) return null;
-        const grupos = {};
-        valores.forEach((c) => { const cat = categorizarExame(c.nome); (grupos[cat] = grupos[cat] || []).push(c); });
-        return (
-          <div key={d} style={{ padding: "11px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>{label(d)}</div>
-            {ordem.filter((g) => grupos[g]).map((g) => (
-              <div key={g} style={{ marginBottom: 7 }}>
-                <div className="eb" style={{ fontSize: 9.5, fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: ".04em" }}>{g}</div>
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                  {grupos[g].map((c) => (
-                    <span key={c.key} className="pill" style={{ background: "var(--rule)", color: "var(--ink)" }}>{c.nome}: {n1(exames[d][c.key])}</span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        );
-      })}
+    <div className="stickyTable">
+      <table>
+        <thead><tr><th>Índice</th>{datas.map((d) => <th key={d}>{label(d).slice(0, 6)}</th>)}</tr></thead>
+        <tbody>
+          {ordem.map((g) => (
+            <React.Fragment key={g}>
+              <tr className="grupo"><td colSpan={datas.length + 1}>{g}</td></tr>
+              {grupos[g].map((c) => (
+                <tr key={c.key}>
+                  <td>{c.nome}</td>
+                  {datas.map((d) => <td key={d} className="num">{exames[d][c.key] != null ? n1(exames[d][c.key]) : "—"}</td>)}
+                </tr>
+              ))}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -2234,35 +2231,24 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
             return (
               <button key={d.key} onClick={() => onPick(d.key)}
                 style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", borderTop: "1px solid var(--rule)", borderRadius: 0, padding: "11px 0" }}>
-                <div className="row" style={{ marginBottom: 6 }}>
+                <div className="row" style={{ marginBottom: 9 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     <span style={{ fontSize: 12.5, fontWeight: 600 }}>{label(d.key)}</span>
                     {d.temMedida && <span title="medição registrada" style={{ fontSize: 10 }}>📏</span>}
                     {d.temExame && <span title="exame registrado" style={{ fontSize: 10 }}>🧪</span>}
                   </div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    {d.pctMeta != null && (
-                      <span className="pill" style={{ background: d.pctMeta >= 90 && d.pctMeta <= 110 ? "var(--lime-s)" : "var(--coral-s)", color: d.pctMeta >= 90 && d.pctMeta <= 110 ? "var(--lime-d)" : "var(--coral-d)" }}>
-                        {n0(d.pctMeta)}% da meta
-                      </span>
-                    )}
-                    <span className="num" style={{ fontSize: 13, color: d.vazio ? "var(--ink3)" : "var(--ink)", fontWeight: d.vazio ? 500 : 800 }}>
-                      {d.vazio ? "—" : `${fmt(d.kcal)}${d.metaDia.kcal ? `/${fmt(d.metaDia.kcal)}` : ""} kcal`}
-                    </span>
-                  </div>
                 </div>
-                {!d.vazio && (
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 7 }}>
-                    <Pills m={{ carb: d.carb, prot: d.prot, gord: d.gord }} metas={{ carb: d.metaDia.carb, prot: d.metaDia.prot, gord: d.metaDia.gord }} />
-                  </div>
-                )}
-                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  {MACROS.map((x) => {
-                    const v = d[x.k], meta = d.metaDia[x.k] || 0;
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {BARRAS_DIA.map((x) => {
+                    const v = d[x.k];
+                    const meta = x.k === "kcal" ? d.metaDia.kcal : d.metaDia[x.k];
                     const pct = meta ? Math.min(100, (v / meta) * 100) : 0;
                     return (
-                      <div key={x.k} style={{ height: 5, background: x.bg, borderRadius: 999 }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: x.cor, borderRadius: 999 }} />
+                      <div key={x.k} style={{ position: "relative", height: 24, background: x.bg, borderRadius: 8, overflow: "hidden" }}>
+                        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: x.cor }} />
+                        <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", padding: "0 9px", fontSize: 11, fontWeight: 700, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.3)" }}>
+                          {x.nome} · {fmt(v)}{meta ? `/${fmt(meta)}` : ""}{x.un}
+                        </div>
                       </div>
                     );
                   })}
@@ -3172,38 +3158,43 @@ function Perfil({ data, cfg, refModeloPadrao, persist }) {
       <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 14 }}>Perfil</div>
 
       <div className="card" style={{ padding: 18, marginBottom: 11 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <label style={{ display: "block", cursor: "pointer", flex: "0 0 auto" }}>
-            <div style={{ width: 64, height: 64, borderRadius: 999, background: "var(--coral-s)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", border: "2px solid var(--rule)" }}>
-              {!carregando && foto ? <img src={foto} alt="Perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 22, fontWeight: 800, color: "var(--coral-d)" }}>P</span>}
+            <div style={{ width: 84, height: 84, borderRadius: 999, background: "var(--coral-s)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", border: "2px solid var(--rule)" }}>
+              {!carregando && foto ? <img src={foto} alt="Perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 28, fontWeight: 800, color: "var(--coral-d)" }}>P</span>}
             </div>
             <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => e.target.files && e.target.files[0] && trocarFoto(e.target.files[0])} />
             <div className="eb" style={{ color: "var(--coral-d)", fontWeight: 700, marginTop: 5, textAlign: "center", fontSize: 9.5 }}>{foto ? "trocar" : "adicionar"}</div>
           </label>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 7 }}>Pedro Hungria</div>
-            <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 6 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Pedro Hungria</div>
+            <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 7 }}>
               <span className="eb" style={{ whiteSpace: "nowrap" }}>altura</span>
               <input className="num" inputMode="numeric" placeholder="cm" value={alturaVal}
                 onChange={(e) => setAlturaVal(e.target.value.replace(/\D/g, ""))}
                 onBlur={() => alturaVal && Number(alturaVal) !== data.altura && persist({ ...data, altura: Number(alturaVal) })}
-                style={{ width: 52, padding: "4px 6px", fontSize: 12, textAlign: "center" }} />
+                style={{ width: 56, padding: "5px 7px", fontSize: 12.5, textAlign: "center" }} />
               <span className="eb">cm</span>
             </div>
-            <div className="eb" style={{ marginBottom: 6 }}>{email || "carregando…"}</div>
-            <button className="mini" style={{ color: "var(--coral-d)" }} onClick={() => setSenhaAberta(!senhaAberta)}>{senhaAberta ? "cancelar" : "trocar senha"}</button>
+            <div className="eb" style={{ marginBottom: 8 }}>{email || "carregando…"}</div>
+            <button className="ghost" style={{ padding: "6px 12px", fontSize: 11.5 }} onClick={() => setSenhaAberta(true)}>🔒 Trocar senha</button>
           </div>
         </div>
-        {senhaAberta && (
-          <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid var(--rule)" }}>
-            <input type="password" placeholder="nova senha" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} style={{ marginBottom: 7 }} />
-            <input type="password" placeholder="confirmar nova senha" value={confSenha} onChange={(e) => setConfSenha(e.target.value)} style={{ marginBottom: 9 }} />
-            {statusSenha && <div className="eb" style={{ marginBottom: 9, color: statusSenha.includes("sucesso") ? "var(--lime-d)" : "var(--coral-d)" }}>{statusSenha}</div>}
-            <button className="ghost" style={{ width: "100%" }} disabled={!novaSenha || !confSenha} onClick={trocarSenha}>Salvar nova senha</button>
-            <div className="eb" style={{ marginTop: 8, lineHeight: 1.5 }}>Definir uma senha é opcional — você pode continuar entrando só pelo link por e-mail se preferir.</div>
-          </div>
-        )}
       </div>
+
+      {senhaAberta && (
+        <div className="sheet">
+          <div className="row" style={{ marginBottom: 18 }}>
+            <span style={{ fontSize: 17, fontWeight: 700 }}>Trocar senha</span>
+            <button className="ghost" onClick={() => { setSenhaAberta(false); setStatusSenha(""); setNovaSenha(""); setConfSenha(""); }}>fechar</button>
+          </div>
+          <input type="password" placeholder="nova senha" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} style={{ marginBottom: 10 }} />
+          <input type="password" placeholder="confirmar nova senha" value={confSenha} onChange={(e) => setConfSenha(e.target.value)} style={{ marginBottom: 12 }} />
+          {statusSenha && <div className="eb" style={{ marginBottom: 12, color: statusSenha.includes("sucesso") ? "var(--lime-d)" : "var(--coral-d)" }}>{statusSenha}</div>}
+          <button className="cta" disabled={!novaSenha || !confSenha} onClick={trocarSenha}>Salvar nova senha</button>
+          <div className="eb" style={{ marginTop: 10, lineHeight: 1.5 }}>Definir uma senha é opcional — você pode continuar entrando só pelo link por e-mail se preferir.</div>
+        </div>
+      )}
 
       <div className="card" style={{ padding: 15, marginBottom: 11 }}>
         <div className="eb" style={{ fontWeight: 700, marginBottom: 9 }}>Meta ativa</div>
@@ -3279,6 +3270,7 @@ function Perfil({ data, cfg, refModeloPadrao, persist }) {
 
 /* ---------- ajustes ---------- */
 function Ajustes({ data, cfg, persist, flash }) {
+  const [dietasAbertas, setDietasAbertas] = useState(false);
   const set = (patch) => persist({ ...data, config: { ...cfg, ...patch } });
 
   function exportar() {
@@ -3363,49 +3355,53 @@ function Ajustes({ data, cfg, persist, flash }) {
     <>
       <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 14 }}>Ajustes</div>
 
-      <div className="card" style={{ padding: "6px 15px 15px", marginBottom: 11 }}>
-        <div style={{ padding: "12px 0 8px" }}>
-          <span className="eb" style={{ fontWeight: 700 }}>Meus modelos de dieta</span>
-        </div>
-        {cfg.refeicoesModelos.map((r, ri) => (
-          <ModeloRefeicaoRow key={r.id} r={r}
-            onRenomear={(nome) => setRefs(cfg.refeicoesModelos.map((z, k) => (k === ri ? { ...z, nome } : z)))}
-            onPadrao={() => setRefs(cfg.refeicoesModelos.map((z, k) => ({ ...z, padrao: k === ri })))}
-            onExcluir={() => {
-              const restante = cfg.refeicoesModelos.filter((_, k) => k !== ri);
-              if (r.padrao) restante[0].padrao = true;
-              setRefs(restante);
-            }}
-            podeExcluir={cfg.refeicoesModelos.length > 1}
-            onMetaAgua={(ml) => setRefs(cfg.refeicoesModelos.map((z, k) => (k === ri ? { ...z, metaAgua: ml } : z)))}
-            onMeals={(meals) => setRefs(cfg.refeicoesModelos.map((z, k) => (k === ri ? { ...z, meals } : z)))} />
-        ))}
-        <button className="ghost" style={{ width: "100%", marginTop: 9 }}
-          onClick={() => setRefs([...cfg.refeicoesModelos, { id: uid(), nome: "Novo modelo", padrao: false, metaAgua: 2500, meals: MEALS_PADRAO.map((m) => ({ ...m, id: uid(), alvo: null })) }])}>
-          + novo modelo
+      <div className="strip" style={{ marginBottom: 11 }}>
+        <button className="stripBtn" onClick={() => setDietasAbertas(!dietasAbertas)}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14 }}>🍽️</span>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>Dietas</span>
+            <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>{cfg.refeicoesModelos.length}</span>
+          </div>
+          <span style={{ color: "var(--ink3)", fontSize: 12 }}>{dietasAbertas ? "▲" : "▼"}</span>
         </button>
-        <div className="eb" style={{ marginTop: 10, lineHeight: 1.5 }}>
-          Cada modelo já traz nome, horário e as metas de macro de cada dieta. Toque em "adotar como padrão" para ele abrir sozinho em dias novos; no Diário dá para trocar só para o dia atual.
-        </div>
+        {dietasAbertas && (
+          <div style={{ marginTop: 10 }}>
+            {cfg.refeicoesModelos.map((r, ri) => (
+              <ModeloRefeicaoRow key={r.id} r={r}
+                onRenomear={(nome) => setRefs(cfg.refeicoesModelos.map((z, k) => (k === ri ? { ...z, nome } : z)))}
+                onPadrao={() => setRefs(cfg.refeicoesModelos.map((z, k) => ({ ...z, padrao: k === ri })))}
+                onExcluir={() => {
+                  const restante = cfg.refeicoesModelos.filter((_, k) => k !== ri);
+                  if (r.padrao) restante[0].padrao = true;
+                  setRefs(restante);
+                }}
+                podeExcluir={cfg.refeicoesModelos.length > 1}
+                onMetaAgua={(ml) => setRefs(cfg.refeicoesModelos.map((z, k) => (k === ri ? { ...z, metaAgua: ml } : z)))}
+                onMeals={(meals) => setRefs(cfg.refeicoesModelos.map((z, k) => (k === ri ? { ...z, meals } : z)))} />
+            ))}
+            <button className="ghost" style={{ width: "100%", marginTop: 9 }}
+              onClick={() => setRefs([...cfg.refeicoesModelos, { id: uid(), nome: "Novo modelo", padrao: false, metaAgua: 2500, meals: MEALS_PADRAO.map((m) => ({ ...m, id: uid(), alvo: null })) }])}>
+              + novo modelo
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="card" style={{ padding: "6px 15px 15px", marginBottom: 11 }}>
+      <div style={{ marginBottom: 11 }}>
         <ItemDoseStrip titulo="Medicamentos" icone="💊" novoNome="Novo medicamento"
           lista={cfg.medicamentos} historico={data.medicamentoHistorico || {}}
           onLista={(l) => set({ medicamentos: l })}
           onDose={(id, novoHist) => persist({ ...data, medicamentoHistorico: { ...(data.medicamentoHistorico || {}), [id]: novoHist } })} />
-        <div className="eb" style={{ marginTop: 4, lineHeight: 1.5 }}>Toda "nova dose" fica registrada no histórico, com a data em que passou a valer — inclusive periodicidade e regra de exceção. Isso entra nas Tendências do Histórico.</div>
       </div>
 
-      <div className="card" style={{ padding: "6px 15px 15px", marginBottom: 11 }}>
+      <div style={{ marginBottom: 11 }}>
         <ItemDoseStrip titulo="Suplementos" icone="💪" novoNome="Novo suplemento"
           lista={cfg.supps} historico={data.suplementoHistorico || {}}
           onLista={(l) => set({ supps: l })}
           onDose={(id, novoHist) => persist({ ...data, suplementoHistorico: { ...(data.suplementoHistorico || {}), [id]: novoHist } })} />
-        <div className="eb" style={{ marginTop: 4, lineHeight: 1.5 }}>Mesma lógica dos medicamentos: cada "nova dose" registra dose, periodicidade e regra de exceção, com histórico completo.</div>
       </div>
 
-      <div className="card" style={{ padding: "6px 15px 15px", marginBottom: 11 }}>
+      <div style={{ marginBottom: 11 }}>
         <Marcadores lista={cfg.marcadores} valores={{}} onValor={() => {}} onLista={(l) => set({ marcadores: l })} />
       </div>
 
