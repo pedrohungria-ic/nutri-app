@@ -232,10 +232,10 @@ const MACROS = [
   { k: "gord", lb: "gord", nome: "Gord", icone: "🧈", cor: "var(--violet)", txt: "var(--violet-d)", bg: "var(--violet-s)" },
 ];
 const BARRAS_DIA = [
-  { k: "kcal", nome: "Kcal", cor: "var(--coral)", bg: "var(--coral-s)", un: "" },
-  { k: "carb", nome: "Carbo", cor: "var(--orange)", bg: "var(--orange-s)", un: "g" },
-  { k: "prot", nome: "Prot", cor: "var(--lime)", bg: "var(--lime-s)", un: "g" },
-  { k: "gord", nome: "Gord", cor: "var(--violet)", bg: "var(--violet-s)", un: "g" },
+  { k: "kcal", nome: "Kcal", cor: "var(--coral)", bg: "var(--coral-s)", txt: "var(--coral-d)", un: "" },
+  { k: "carb", nome: "Carbo", cor: "var(--orange)", bg: "var(--orange-s)", txt: "var(--orange-d)", un: "g" },
+  { k: "prot", nome: "Prot", cor: "var(--lime)", bg: "var(--lime-s)", txt: "var(--lime-d)", un: "g" },
+  { k: "gord", nome: "Gord", cor: "var(--violet)", bg: "var(--violet-s)", txt: "var(--violet-d)", un: "g" },
 ];
 
 const MEDIDAS_CAMPOS = [
@@ -294,13 +294,11 @@ width:56px;height:56px;border-radius:999px;background:var(--coral);color:#fff;fo
 display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(245,56,93,.4)}
 .nx .fab:active{transform:scale(.94)}
 .nx .fab[data-on="1"]{background:var(--ink)}
-.nx .condensada{position:fixed;top:0;left:0;right:0;z-index:44;background:#fff;padding:7px 12px;
-display:flex;align-items:center;gap:0;box-shadow:0 2px 8px rgba(27,37,89,.1);overflow:hidden}
+.nx .congelado{position:sticky;top:0;z-index:44;background:var(--bg);padding-top:2px;margin-bottom:10px}
 .nx .fabMenu{position:fixed;right:20px;bottom:calc(146px + env(safe-area-inset-bottom));z-index:46;display:flex;flex-direction:column;gap:9px;align-items:flex-end}
 @media (min-width:540px){
   .nx .fab{right:calc(50% - 240px + 20px)}
   .nx .fabMenu{right:calc(50% - 240px + 20px)}
-  .nx .condensada{left:50%;right:auto;transform:translateX(-50%);width:480px;box-shadow:0 2px 8px rgba(27,37,89,.1),0 0 0 1px var(--rule)}
 }
 
 .nx .strip{background:var(--card);border-radius:14px;padding:10px 13px;margin-bottom:12px;box-shadow:0 1px 2px rgba(27,37,89,.05)}
@@ -362,7 +360,6 @@ export default function Nutri() {
   const [sugestao, setSugestao] = useState(null);
   const [modeloOpen, setModeloOpen] = useState(false);
   const [copiarFuturoMeal, setCopiarFuturoMeal] = useState(null);
-  const [condensado, setCondensado] = useState(false);
   const [fotoHeader, setFotoHeader] = useState(null);
   const [userMenu, setUserMenu] = useState(false);
   const [favoritarMeal, setFavoritarMeal] = useState(null);
@@ -442,14 +439,6 @@ export default function Nutri() {
   }
 
   useEffect(() => {
-    if (tab !== "dia") { setCondensado(false); return; }
-    const aoRolar = () => setCondensado(window.scrollY > 230);
-    window.addEventListener("scroll", aoRolar, { passive: true });
-    aoRolar();
-    return () => window.removeEventListener("scroll", aoRolar);
-  }, [tab]);
-
-  useEffect(() => {
     (async () => {
       try { const r = await window.storage.get("foto:perfil"); setFotoHeader(r ? r.value : null); }
       catch { setFotoHeader(null); }
@@ -465,83 +454,77 @@ export default function Nutri() {
 
       {tab === "dia" && (
         <>
-          <div className="row" style={{ marginBottom: 14, position: "relative" }}>
-            <button onClick={() => setUserMenu(!userMenu)} style={{ display: "flex", alignItems: "center", gap: 10, background: "transparent", padding: 0 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 999, background: "var(--coral-s)", color: "var(--coral-d)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, overflow: "hidden", flex: "0 0 auto" }}>
-                {fotoHeader ? <img src={fotoHeader} alt="Pedro" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "P"}
-              </div>
-              <div style={{ textAlign: "left" }}>
-                <div style={{ fontSize: 17, fontWeight: 700 }}>Pedro</div>
-                <div className="eb">{label(day)}</div>
-              </div>
-            </button>
-            {userMenu && (
-              <div className="menu" style={{ top: "100%", left: 0, right: "auto" }} onMouseLeave={() => setUserMenu(false)}>
-                <button onClick={() => { setUserMenu(false); setTab("perfil"); }}>Ver perfil</button>
-                <button style={{ color: "var(--coral-d)" }} onClick={() => { setUserMenu(false); supabase.auth.signOut(); }}>Sair</button>
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 6 }}>
-              <button className="ghost" style={{ padding: "8px 11px" }} onClick={() => setModeloOpen(true)}>
-                {cfg.refeicoesModelos.find((r) => r.id === modeloHojeId)?.nome || "Dieta"}
+          <div className="congelado">
+            <div className="row" style={{ position: "relative", marginBottom: 10 }}>
+              <button onClick={() => setUserMenu(!userMenu)} style={{ display: "flex", alignItems: "center", gap: 10, background: "transparent", padding: 0 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 999, background: "var(--coral-s)", color: "var(--coral-d)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, overflow: "hidden", flex: "0 0 auto" }}>
+                  {fotoHeader ? <img src={fotoHeader} alt="Pedro" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "P"}
+                </div>
+                <div style={{ fontSize: 17, fontWeight: 700 }}>Olá, Pedro</div>
               </button>
+              {userMenu && (
+                <div className="menu" style={{ top: "100%", left: 0, right: "auto" }} onMouseLeave={() => setUserMenu(false)}>
+                  <button onClick={() => { setUserMenu(false); setTab("perfil"); }}>Ver perfil</button>
+                  <button style={{ color: "var(--coral-d)" }} onClick={() => { setUserMenu(false); supabase.auth.signOut(); }}>Sair</button>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <button className="ghost" style={{ padding: "8px 11px" }} onClick={() => shift(-1)} aria-label="Dia anterior">←</button>
+              <span style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: 700 }}>{label(day)}</span>
               <button className="ghost" style={{ padding: "8px 11px" }} onClick={() => shift(1)} aria-label="Próximo dia">→</button>
             </div>
-          </div>
 
-          {condensado && (
-            <BarraCondensada
+            <button onClick={() => setModeloOpen(true)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "var(--card)", borderRadius: 12, padding: "10px 13px", marginBottom: 10, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
+              <span className="eb">Dieta de hoje</span>
+              <span style={{ fontSize: 13.5, fontWeight: 700 }}>{cfg.refeicoesModelos.find((r) => r.id === modeloHojeId)?.nome || "Dieta"}</span>
+            </button>
+
+            <PainelTopo
               pesos={data.pesos || {}} day={day}
+              onSetPeso={(kg) => persist({ ...data, pesos: { ...(data.pesos || {}), [day]: kg } })}
               medLista={cfg.medicamentos} medMarcados={dia.medicamentos || []} medHistorico={data.medicamentoHistorico || {}}
+              onToggleMed={(m) => {
+                const hist = (data.medicamentoHistorico || {})[m.id];
+                const jaMarcado = (dia.medicamentos || []).includes(m.nome);
+                const ativa = doseNaData(hist, day);
+                const recalcular = !jaMarcado && ativa && ativa.excecao === "recalcular" && !itemDue(hist, day);
+                if (recalcular && !window.confirm(`${m.nome} não estava previsto para hoje. Como a regra dele é "recalcular ciclo", marcar agora vai contar os próximos dias a partir de hoje. Confirma?`)) return;
+                const novoMarcados = jaMarcado ? dia.medicamentos.filter((z) => z !== m.nome) : [...(dia.medicamentos || []), m.nome];
+                const novoDia = { ...dia, medicamentos: novoMarcados };
+                let novoHistGeral = data.medicamentoHistorico || {};
+                if (recalcular) {
+                  const novaEntrada = { ...ativa, data: day };
+                  const listaAtual = (hist || []).filter((h) => h.data !== day);
+                  novoHistGeral = { ...novoHistGeral, [m.id]: [...listaAtual, novaEntrada].sort((a, b) => a.data.localeCompare(b.data)) };
+                }
+                persist({ ...data, medicamentoHistorico: novoHistGeral, days: { ...data.days, [day]: novoDia } });
+              }}
               suppLista={cfg.supps} suppMarcados={dia.supps || []} suppHistorico={data.suplementoHistorico || {}}
+              onToggleSupp={(s) => {
+                const hist = (data.suplementoHistorico || {})[s.id];
+                const jaMarcado = (dia.supps || []).includes(s.nome);
+                const ativa = doseNaData(hist, day);
+                const recalcular = !jaMarcado && ativa && ativa.excecao === "recalcular" && !itemDue(hist, day);
+                if (recalcular && !window.confirm(`${s.nome} não estava previsto para hoje. Como a regra dele é "recalcular ciclo", marcar agora vai contar os próximos dias a partir de hoje. Confirma?`)) return;
+                const novoMarcados = jaMarcado ? dia.supps.filter((z) => z !== s.nome) : [...(dia.supps || []), s.nome];
+                const novoDia = { ...dia, supps: novoMarcados };
+                let novoHistGeral = data.suplementoHistorico || {};
+                if (recalcular) {
+                  const novaEntrada = { ...ativa, data: day };
+                  const listaAtual = (hist || []).filter((h) => h.data !== day);
+                  novoHistGeral = { ...novoHistGeral, [s.id]: [...listaAtual, novaEntrada].sort((a, b) => a.data.localeCompare(b.data)) };
+                }
+                persist({ ...data, suplementoHistorico: novoHistGeral, days: { ...data.days, [day]: novoDia } });
+              }}
               marcLista={cfg.marcadores} marcValores={dia.marcadores || {}}
-              tot={tot} cfg={metaHoje} />
-          )}
+              onMarcValor={(id, v) => setDia({ marcadores: { ...(dia.marcadores || {}), [id]: v } })}
+              onMarcLista={(l) => persist({ ...data, config: { ...cfg, marcadores: l } })}
+            />
 
-          <PainelTopo
-            pesos={data.pesos || {}} day={day}
-            onSetPeso={(kg) => persist({ ...data, pesos: { ...(data.pesos || {}), [day]: kg } })}
-            medLista={cfg.medicamentos} medMarcados={dia.medicamentos || []} medHistorico={data.medicamentoHistorico || {}}
-            onToggleMed={(m) => {
-              const hist = (data.medicamentoHistorico || {})[m.id];
-              const jaMarcado = (dia.medicamentos || []).includes(m.nome);
-              const ativa = doseNaData(hist, day);
-              const recalcular = !jaMarcado && ativa && ativa.excecao === "recalcular" && !itemDue(hist, day);
-              if (recalcular && !window.confirm(`${m.nome} não estava previsto para hoje. Como a regra dele é "recalcular ciclo", marcar agora vai contar os próximos dias a partir de hoje. Confirma?`)) return;
-              const novoMarcados = jaMarcado ? dia.medicamentos.filter((z) => z !== m.nome) : [...(dia.medicamentos || []), m.nome];
-              const novoDia = { ...dia, medicamentos: novoMarcados };
-              let novoHistGeral = data.medicamentoHistorico || {};
-              if (recalcular) {
-                const novaEntrada = { ...ativa, data: day };
-                const listaAtual = (hist || []).filter((h) => h.data !== day);
-                novoHistGeral = { ...novoHistGeral, [m.id]: [...listaAtual, novaEntrada].sort((a, b) => a.data.localeCompare(b.data)) };
-              }
-              persist({ ...data, medicamentoHistorico: novoHistGeral, days: { ...data.days, [day]: novoDia } });
-            }}
-            suppLista={cfg.supps} suppMarcados={dia.supps || []} suppHistorico={data.suplementoHistorico || {}}
-            onToggleSupp={(s) => {
-              const hist = (data.suplementoHistorico || {})[s.id];
-              const jaMarcado = (dia.supps || []).includes(s.nome);
-              const ativa = doseNaData(hist, day);
-              const recalcular = !jaMarcado && ativa && ativa.excecao === "recalcular" && !itemDue(hist, day);
-              if (recalcular && !window.confirm(`${s.nome} não estava previsto para hoje. Como a regra dele é "recalcular ciclo", marcar agora vai contar os próximos dias a partir de hoje. Confirma?`)) return;
-              const novoMarcados = jaMarcado ? dia.supps.filter((z) => z !== s.nome) : [...(dia.supps || []), s.nome];
-              const novoDia = { ...dia, supps: novoMarcados };
-              let novoHistGeral = data.suplementoHistorico || {};
-              if (recalcular) {
-                const novaEntrada = { ...ativa, data: day };
-                const listaAtual = (hist || []).filter((h) => h.data !== day);
-                novoHistGeral = { ...novoHistGeral, [s.id]: [...listaAtual, novaEntrada].sort((a, b) => a.data.localeCompare(b.data)) };
-              }
-              persist({ ...data, suplementoHistorico: novoHistGeral, days: { ...data.days, [day]: novoDia } });
-            }}
-            marcLista={cfg.marcadores} marcValores={dia.marcadores || {}}
-            onMarcValor={(id, v) => setDia({ marcadores: { ...(dia.marcadores || {}), [id]: v } })}
-            onMarcLista={(l) => persist({ ...data, config: { ...cfg, marcadores: l } })}
-          />
-
-          <LinhaMacros tot={tot} cfg={metaHoje} />
+            <LinhaMacros tot={tot} cfg={metaHoje} />
+          </div>
 
           <CardAgua ml={dia.agua || 0} meta={refModeloPadrao.metaAgua || 2500}
             onAlterar={(delta) => setDia({ agua: Math.max(0, (dia.agua || 0) + delta) })} />
@@ -697,39 +680,6 @@ export default function Nutri() {
 }
 
 /* ---------- suplementos: fino, no topo, expansível, editável ---------- */
-function BarraCondensada({ pesos, day, medLista, medMarcados, medHistorico, suppLista, suppMarcados, suppHistorico, marcLista, marcValores, tot, cfg }) {
-  const medHoje = medLista.filter((m) => itemDue((medHistorico || {})[m.id], day));
-  const medFeito = medHoje.filter((m) => medMarcados.includes(m.nome)).length;
-  const suppHoje = suppLista.filter((s) => itemDue((suppHistorico || {})[s.id], day));
-  const suppFeito = suppHoje.filter((s) => suppMarcados.includes(s.nome)).length;
-  const marcPreenchidos = marcLista.filter((m) => marcValores[m.id] != null);
-  const marcMedia = marcPreenchidos.length ? marcPreenchidos.reduce((a, m) => a + marcValores[m.id], 0) / marcPreenchidos.length : null;
-
-  const Mini = ({ titulo, valor }) => (
-    <div style={{ background: "var(--bg)", borderRadius: 9, padding: "5px 9px", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, flex: "0 0 auto", minWidth: 50 }}>
-      <span className="eb" style={{ fontSize: 8.5 }}>{titulo}</span>
-      <span className="num" style={{ fontSize: 10.5, fontWeight: 800, color: "var(--ink)" }}>{valor}</span>
-    </div>
-  );
-
-  return (
-    <div className="condensada">
-      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-        <Mini titulo="Peso" valor={pesos[day] != null ? `${n1(pesos[day])}kg` : "—"} />
-        <Mini titulo="Meds" valor={`${medFeito}/${medHoje.length}`} />
-        <Mini titulo="Supl" valor={`${suppFeito}/${suppHoje.length}`} />
-        <Mini titulo="Humor" valor={marcMedia != null ? `${marcMedia.toFixed(1)}/5` : "—"} />
-      </div>
-      <div style={{ display: "flex", gap: 6 }}>
-        <Mini titulo="Kcal" valor={`${fmt(tot.kcal)}/${fmt(cfg.kcal)}`} />
-        <Mini titulo="Carbo" valor={`${fmt(tot.carb)}/${fmt(cfg.carb)}`} />
-        <Mini titulo="Prot" valor={`${fmt(tot.prot)}/${fmt(cfg.prot)}`} />
-        <Mini titulo="Gord" valor={`${fmt(tot.gord)}/${fmt(cfg.gord)}`} />
-      </div>
-    </div>
-  );
-}
-
 function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico, onToggleMed, suppLista, suppMarcados, suppHistorico, onToggleSupp, marcLista, marcValores, onMarcValor, onMarcLista }) {
   const [aberto, setAberto] = useState(null);
 
@@ -945,7 +895,6 @@ function ItemDoseStrip({ titulo, icone, lista, historico, onLista, onDose, novoN
   const [form, setForm] = useState({ dose: "", unidade: "mg", cadaDias: "1", excecao: "manter", horario: "", data: iso(new Date()) });
 
   const hoje = iso(new Date());
-  const ativos = lista.filter((m) => doseNaData(historico[m.id], hoje)).length;
 
   function abrirNovaDose(m) {
     const atual = doseNaData(historico[m.id], hoje);
@@ -971,8 +920,8 @@ function ItemDoseStrip({ titulo, icone, lista, historico, onLista, onDose, novoN
         <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 14 }}>{icone}</span>
           <span style={{ fontSize: 13.5, fontWeight: 600 }}>{titulo}</span>
-          <span className="pill" style={{ background: ativos ? "var(--lime-s)" : "var(--rule)", color: ativos ? "var(--lime-d)" : "var(--ink2)" }}>
-            {ativos}/{lista.length}
+          <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>
+            {lista.length}
           </span>
         </div>
         <span style={{ color: "var(--ink3)", fontSize: 12 }}>{open ? "▲" : "▼"}</span>
@@ -2232,10 +2181,10 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
               <button key={d.key} onClick={() => onPick(d.key)}
                 style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", borderTop: "1px solid var(--rule)", borderRadius: 0, padding: "11px 0" }}>
                 <div className="row" style={{ marginBottom: 9 }}>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 600 }}>{label(d.key)}</span>
-                    {d.temMedida && <span title="medição registrada" style={{ fontSize: 10 }}>📏</span>}
-                    {d.temExame && <span title="exame registrado" style={{ fontSize: 10 }}>🧪</span>}
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>{label(d.key)}</span>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {d.temMedida && <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>📏 Medição</span>}
+                    {d.temExame && <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>🧪 Exame</span>}
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -2246,7 +2195,7 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
                     return (
                       <div key={x.k} style={{ position: "relative", height: 24, background: x.bg, borderRadius: 8, overflow: "hidden" }}>
                         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: x.cor }} />
-                        <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", padding: "0 9px", fontSize: 11, fontWeight: 700, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.3)" }}>
+                        <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", padding: "0 9px", fontSize: 11, fontWeight: 700, color: x.txt }}>
                           {x.nome} · {fmt(v)}{meta ? `/${fmt(meta)}` : ""}{x.un}
                         </div>
                       </div>
@@ -2256,9 +2205,6 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
               </button>
             );
           })}
-          <div style={{ display: "flex", gap: 6, marginTop: 13, flexWrap: "wrap" }}>
-            {MACROS.map((x) => <span key={x.k} className="pill" style={{ background: x.bg, color: x.txt }}>{x.nome}</span>)}
-          </div>
         </div>
       </div>
 
@@ -3456,7 +3402,7 @@ function ModeloRefeicaoRow({ r, onRenomear, onPadrao, onExcluir, podeExcluir, on
             </div>
           ))}
           <button className="ghost" style={{ width: "100%", marginTop: 9 }}
-            onClick={() => onMeals([...r.meals, { id: uid(), nome: "Nova dieta", hora: "", alvo: null }])}>+ dieta</button>
+            onClick={() => onMeals([...r.meals, { id: uid(), nome: "Nova refeição", hora: "", alvo: null }])}>+ refeição</button>
         </div>
       )}
     </div>
