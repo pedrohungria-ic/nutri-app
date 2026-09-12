@@ -124,6 +124,7 @@ const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "o
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const fromIso = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const label = (s) => { const d = fromIso(s); return s === iso(new Date()) ? "Hoje" : `${DIAS[d.getDay()]}, ${d.getDate()} ${MESES[d.getMonth()]}`; };
+const dataCompleta = (s) => s.split("-").reverse().join("/");
 const n0 = (v) => Math.round(Number(v) || 0);
 const n1 = (v) => Math.round((Number(v) || 0) * 10) / 10;
 const fmt = (v) => n0(v).toLocaleString("pt-BR");
@@ -265,6 +266,7 @@ const CSS = `
 --lime:#5FC36A;--lime-d:#2E8B48;--lime-s:#E6F7E9;
 --orange:#F5A623;--orange-d:#B87409;--orange-s:#FEF3DE;
 --violet:#7B61FF;--violet-d:#5138D6;--violet-s:#EDE9FF;
+--blue:#3B9FE0;--blue-d:#1B6FA8;--blue-s:#E3F3FC;
 background:var(--bg);color:var(--ink);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
 min-height:100%;padding:14px 14px 88px;-webkit-font-smoothing:antialiased;position:relative;letter-spacing:-.01em}
 .nx{max-width:480px;margin:0 auto}
@@ -581,7 +583,7 @@ export default function Nutri() {
       {tab === "cfg" && <Ajustes data={data} cfg={cfg} persist={persist} flash={flash} />}
 
       <div className="nav">
-        {[["dia", "Diário", I_HOME], ["hist", "Histórico", I_CHART], ["perfil", "Perfil", I_USER], ["cfg", "Ajustes", I_GEAR]].map(([k, v, d]) => (
+        {[["dia", "Diário", I_HOME], ["hist", "Histórico", I_CHART], ["cfg", "Definições", I_GEAR], ["perfil", "Perfil", I_USER]].map(([k, v, d]) => (
           <button key={k} data-on={tab === k ? "1" : "0"} onClick={() => setTab(k)}>
             <Ico d={d} />{v}
           </button>
@@ -1101,7 +1103,7 @@ function MedicoesTabela({ medicoes }) {
   return (
     <div className="stickyTable">
       <table>
-        <thead><tr><th>Medida</th>{datas.map((d) => <th key={d}>{label(d).slice(0, 6)}</th>)}</tr></thead>
+        <thead><tr><th>Medida</th>{datas.map((d) => <th key={d}>{dataCompleta(d)}</th>)}</tr></thead>
         <tbody>
           {campos.map((c) => (
             <tr key={c.key}>
@@ -1129,7 +1131,7 @@ function ExamesTabela({ campos, exames }) {
   return (
     <div className="stickyTable">
       <table>
-        <thead><tr><th>Índice</th>{datas.map((d) => <th key={d}>{label(d).slice(0, 6)}</th>)}</tr></thead>
+        <thead><tr><th>Índice</th>{datas.map((d) => <th key={d}>{dataCompleta(d)}</th>)}</tr></thead>
         <tbody>
           {ordem.map((g) => (
             <React.Fragment key={g}>
@@ -1251,17 +1253,11 @@ function LinhaMacros({ tot, cfg }) {
 function CardAgua({ ml, meta, onAlterar }) {
   const pct = Math.min(100, (ml / (meta || 1)) * 100);
   return (
-    <div className="card" style={{ padding: "11px 13px", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
-      <span style={{ fontSize: 17 }}>💧</span>
-      <div style={{ flex: 1 }}>
-        <div className="row" style={{ marginBottom: 5 }}>
-          <span className="eb" style={{ fontWeight: 700 }}>Água</span>
-          <span className="num" style={{ fontSize: 12, fontWeight: 700 }}>
-            {(ml / 1000).toFixed(2)}L <span style={{ color: "var(--ink2)", fontWeight: 500 }}>/ {(meta / 1000).toFixed(2)}L</span>
-          </span>
-        </div>
-        <div className="track" style={{ height: 6 }}>
-          <div className="fill" style={{ width: `${pct}%`, background: "var(--violet)" }} />
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+      <div style={{ position: "relative", height: 24, flex: 1, background: "var(--blue-s)", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: "var(--blue)" }} />
+        <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", padding: "0 9px", fontSize: 11, fontWeight: 700, color: "var(--blue-d)" }}>
+          💧 Água · {(ml / 1000).toFixed(2)}/{(meta / 1000).toFixed(2)}L
         </div>
       </div>
       <button className="mini" style={{ fontSize: 16, padding: "2px 8px" }} onClick={() => onAlterar(-50)} aria-label="Menos 50ml">−</button>
@@ -1281,14 +1277,6 @@ function MealCard({ meal, clip, onAdd, onVoz, onSugerir, onPatch, onCopy, onPast
   const over = a && a.kcal && t.kcal > a.kcal * 1.05;
   const setAlvo = (f, v) => onPatch({ alvo: { kcal: 0, prot: 0, carb: 0, gord: 0, ...a, [f]: n0(v) } });
 
-  const Mini = ({ icone, titulo, v, meta, cor }) => (
-    <div style={{ flex: 1, background: "var(--bg)", borderRadius: 10, padding: "7px 5px", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-      <span style={{ fontSize: 13 }}>{icone}</span>
-      <span style={{ fontSize: 8.5, fontWeight: 700, color: "var(--ink2)" }}>{titulo}</span>
-      <span className="num" style={{ fontSize: 9.5, fontWeight: 800, color: cor || "var(--ink)" }}>{fmt(v)}{meta ? `/${fmt(meta)}` : ""}</span>
-    </div>
-  );
-
   if (!aberto) {
     return (
       <button className="card" onClick={() => setAberto(true)}
@@ -1297,9 +1285,16 @@ function MealCard({ meal, clip, onAdd, onVoz, onSugerir, onPatch, onCopy, onPast
           <span style={{ fontSize: 14.5, fontWeight: 700 }}>{meal.nome}</span>
           <span className="num" style={{ fontSize: 13, fontWeight: 700, color: "var(--ink2)" }}>{meal.hora || "—"}</span>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <Mini icone="🔥" titulo="Kcal" v={t.kcal} meta={a && a.kcal} cor={over ? "var(--coral-d)" : "var(--ink)"} />
-          {MACROS.map((x) => <Mini key={x.k} icone={x.icone} titulo={x.nome} v={t[x.k]} meta={a && a[x.k]} cor={x.txt} />)}
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {BARRAS_DIA.map((x) => {
+            const v = t[x.k];
+            const meta = a && a[x.k];
+            return (
+              <span key={x.k} className="pill" style={{ background: x.bg, color: x.txt, fontWeight: 700 }}>
+                {x.nome} {fmt(v)}{meta ? `/${fmt(meta)}` : ""}{x.un}
+              </span>
+            );
+          })}
         </div>
       </button>
     );
@@ -2117,9 +2112,12 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
 
   return (
     <>
-      <div className="row" style={{ marginBottom: 10 }}>
+      <div className="row" style={{ marginBottom: 14 }}>
         <span style={{ fontSize: 19, fontWeight: 800 }}>Histórico</span>
       </div>
+
+      <SecaoPeso pesos={data.pesos || {}} dataInicio={dataInicio} dataFim={dataFim} />
+
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
         {[["hoje", "Hoje"], ["7d", "7d"], ["14d", "14d"], ["30d", "30d"]].map(([p, lb]) => (
           <button key={p} className="chip" data-on={preset === p ? "1" : "0"} onClick={() => aplicarPreset(p)} style={{ padding: "6px 11px" }}>{lb}</button>
@@ -2134,8 +2132,6 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
           <input type="date" value={dataFim} min={dataInicio} onChange={(e) => setDataFim(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
         </div>
       )}
-
-      <SecaoPeso pesos={data.pesos || {}} dataInicio={dataInicio} dataFim={dataFim} />
 
       <div style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🍽️ Evolução de alimentação</div>
@@ -3301,7 +3297,7 @@ function Ajustes({ data, cfg, persist, flash }) {
 
   return (
     <>
-      <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 14 }}>Ajustes</div>
+      <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 14 }}>Definições</div>
 
       <div className="strip" style={{ marginBottom: 11 }}>
         <button className="stripBtn" onClick={() => setDietasAbertas(!dietasAbertas)}>
