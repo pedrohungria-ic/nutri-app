@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { supabase } from "./supabaseClient.js";
+import Logo from "./Logo.jsx";
 
 const KEY = "nutri:v4";
 const LEGADO = ["nutri:v3", "nutri:v2"];
@@ -114,9 +115,9 @@ const REFEICOES_MODELO_PADRAO = [{ id: uid(), nome: "Padrão", padrao: true, mea
 
 const CONFIG_PADRAO = {
   refeicoesModelos: REFEICOES_MODELO_PADRAO,
-  supps: ["Creatina", "Whey", "BCAA", "Vitamina D", "Ômega 3", "Magnésio"].map((nome) => ({ id: uid(), nome })),
+  supps: [],
   marcadores: ["Qualidade do sono", "Cansaço ao acordar", "Produtividade", "Bem-estar", "Irritabilidade", "Estresse", "Ansiedade"].map((nome) => ({ id: uid(), nome })),
-  medicamentos: ["Testosterona", "Anastrozol"].map((nome) => ({ id: uid(), nome })),
+  medicamentos: [],
 };
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -154,7 +155,7 @@ function migrarPerfilOnboarding(dados, meta) {
   const hoje = iso(new Date());
   return {
     ...dados,
-    perfilConta: { nome: meta.nome, nascimento: meta.nascimento || null, genero: meta.genero || null },
+    perfilConta: { nome: meta.nome, nascimento: meta.nascimento || null, genero: meta.genero || null, telefone: meta.telefone || null },
     altura: dados.altura == null && meta.altura_cm ? meta.altura_cm : dados.altura,
     pesos: meta.peso_kg && dados.pesos[hoje] == null ? { ...dados.pesos, [hoje]: meta.peso_kg } : dados.pesos,
   };
@@ -362,6 +363,70 @@ const I_GEAR = "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.6 1.6 0 00.3 1.8l.1.1a
 const I_USER = "M12 12a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM4 21a8 8 0 0116 0";
 
 /* =============== APP =============== */
+function maskTelefone(digitosBrutos) {
+  const d = String(digitosBrutos || "").replace(/\D/g, "").slice(0, 13);
+  let out = "+" + d.slice(0, 2);
+  if (d.length > 2) out += " (" + d.slice(2, 4);
+  if (d.length >= 4) out += ")";
+  if (d.length > 4) out += " " + d.slice(4, 9);
+  if (d.length > 9) out += "-" + d.slice(9, 13);
+  return out;
+}
+
+function Onboarding({ metadadosConta, onSalvar }) {
+  const nomeInicial = (metadadosConta && (metadadosConta.full_name || metadadosConta.name)) || "";
+  const [nome, setNome] = useState(nomeInicial);
+  const [nascimento, setNascimento] = useState("");
+  const [genero, setGenero] = useState("");
+  const [altura, setAltura] = useState("");
+  const [peso, setPeso] = useState("");
+  const [telDigitos, setTelDigitos] = useState("55");
+
+  const podeSalvar = nome.trim() && nascimento && genero && altura && peso;
+
+  return (
+    <div style={{ padding: "34px 2px 40px", maxWidth: 400, margin: "0 auto" }}>
+      <div style={{ textAlign: "center", marginBottom: 22 }}>
+        <div style={{ margin: "0 auto 12px" }}><Logo size={56} /></div>
+        <div style={{ fontSize: 19, fontWeight: 800 }}>Só mais um passo</div>
+        <div className="eb" style={{ marginTop: 5, lineHeight: 1.5 }}>Completa seu perfil pra gente começar certo.</div>
+      </div>
+
+      <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Nome completo</div>
+      <input value={nome} onChange={(e) => setNome(e.target.value)} style={{ marginBottom: 12 }} />
+
+      <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Data de nascimento</div>
+      <input type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} style={{ marginBottom: 12 }} />
+
+      <div className="eb" style={{ marginBottom: 6, fontWeight: 700 }}>Gênero</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {[["m", "Masculino"], ["f", "Feminino"], ["o", "Outro"]].map(([k, lb]) => (
+          <button key={k} className="chip" data-on={genero === k ? "1" : "0"} style={{ flex: 1 }} onClick={() => setGenero(k)}>{lb}</button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Altura (cm)</div>
+          <input className="num" inputMode="numeric" placeholder="178" value={altura} onChange={(e) => setAltura(e.target.value.replace(/\D/g, ""))} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Peso atual (kg)</div>
+          <input className="num" inputMode="decimal" placeholder="82" value={peso} onChange={(e) => setPeso(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))} />
+        </div>
+      </div>
+
+      <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Celular (opcional)</div>
+      <input inputMode="numeric" value={maskTelefone(telDigitos)} placeholder="+55 (11) 98765-4321"
+        onChange={(e) => setTelDigitos(e.target.value.replace(/\D/g, ""))} style={{ marginBottom: 18 }} />
+
+      <button className="cta" style={{ width: "100%" }} disabled={!podeSalvar} onClick={() => onSalvar({ nome, nascimento, genero, altura, peso, telefone: telDigitos.length > 2 ? maskTelefone(telDigitos) : "" })}>
+        Continuar
+      </button>
+    </div>
+  );
+}
+
 export default function Nutri({ metadadosConta }) {
   const [tab, setTab] = useState("dia");
   const [data, setData] = useState(null);
@@ -469,6 +534,22 @@ export default function Nutri({ metadadosConta }) {
   }, [tab]);
 
   if (!data) return <div className="nx"><style>{CSS}</style><style>{CSS_STICKY}</style><div className="eb">Carregando…</div></div>;
+
+  if (!data.perfilConta) {
+    return (
+      <div className="nx"><style>{CSS}</style><style>{CSS_STICKY}</style>
+        <Onboarding metadadosConta={metadadosConta} onSalvar={(perfil) => {
+          const hoje = iso(new Date());
+          persist({
+            ...data,
+            perfilConta: { nome: perfil.nome, nascimento: perfil.nascimento, genero: perfil.genero, telefone: perfil.telefone },
+            altura: perfil.altura ? Number(perfil.altura) : data.altura,
+            pesos: perfil.peso ? { ...(data.pesos || {}), [hoje]: Number(perfil.peso) } : data.pesos,
+          });
+        }} />
+      </div>
+    );
+  }
   const shift = (k) => { const d = fromIso(day); d.setDate(d.getDate() + k); setDay(iso(d)); };
 
   return (
@@ -477,7 +558,7 @@ export default function Nutri({ metadadosConta }) {
 
       {tab === "dia" && (
         <>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, position: "relative", flexWrap: "wrap", rowGap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, position: "relative", flexWrap: "wrap", rowGap: 8 }}>
               <button onClick={() => setUserMenu(!userMenu)} style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", padding: 0, flex: "0 0 auto" }}>
                 <div style={{ width: 32, height: 32, borderRadius: 999, background: "var(--coral-s)", color: "var(--coral-d)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, overflow: "hidden", flex: "0 0 auto" }}>
                   {fotoHeader ? <img src={fotoHeader} alt="Pedro" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "P"}
@@ -497,10 +578,12 @@ export default function Nutri({ metadadosConta }) {
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--coral-d)", background: "var(--coral-s)", borderRadius: 999, padding: "6px 10px", flex: "0 0 auto" }}>Fotografia</span>
               )}
 
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", flex: "0 0 auto" }}>
-                <button className="mini" onClick={() => shift(-1)} aria-label="Dia anterior">←</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto", flex: "0 0 auto" }}>
+                <button onClick={() => shift(-1)} aria-label="Dia anterior"
+                  style={{ width: 30, height: 30, borderRadius: 9, background: "var(--card)", color: "var(--ink)", fontSize: 14, fontWeight: 700, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>←</button>
                 <span style={{ fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{label(day)}</span>
-                <button className="mini" onClick={() => shift(1)} aria-label="Próximo dia">→</button>
+                <button onClick={() => shift(1)} aria-label="Próximo dia"
+                  style={{ width: 30, height: 30, borderRadius: 9, background: "var(--card)", color: "var(--ink)", fontSize: 14, fontWeight: 700, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>→</button>
               </div>
 
               {userMenu && (
@@ -977,12 +1060,10 @@ function PeriodicidadeStrip({ titulo, icone, historico, onNovo }) {
         <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 14 }}>{icone}</span>
           <span style={{ fontSize: 13.5, fontWeight: 600 }}>{titulo}</span>
-          {ativa ? (
+          {ativa && (
             <span className="pill" style={{ background: due ? "var(--orange-s)" : "var(--rule)", color: due ? "var(--orange-d)" : "var(--ink2)" }}>
               {due ? "hoje" : `a cada ${ativa.cadaDias}d`}
             </span>
-          ) : (
-            <span className="pill" style={{ background: "var(--coral-s)", color: "var(--coral-d)" }}>sem periodicidade</span>
           )}
         </div>
         <span style={{ color: "var(--ink3)", fontSize: 12 }}>{open ? "▲" : "▼"}</span>

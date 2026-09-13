@@ -32,6 +32,17 @@ export default function Login() {
   const [genero, setGenero] = useState("");
   const [altura, setAltura] = useState("");
   const [peso, setPeso] = useState("");
+  const [telDigitos, setTelDigitos] = useState("55");
+
+  function maskTelefone(digitosBrutos) {
+    const d = String(digitosBrutos || "").replace(/\D/g, "").slice(0, 13);
+    let out = "+" + d.slice(0, 2);
+    if (d.length > 2) out += " (" + d.slice(2, 4);
+    if (d.length >= 4) out += ")";
+    if (d.length > 4) out += " " + d.slice(4, 9);
+    if (d.length > 9) out += "-" + d.slice(9, 13);
+    return out;
+  }
 
   async function entrarComSenha() {
     if (!email.trim() || !senha) return;
@@ -75,6 +86,7 @@ export default function Login() {
           genero: genero || null,
           altura_cm: altura ? Number(altura) : null,
           peso_kg: peso ? Number(peso) : null,
+          telefone: telDigitos.length > 2 ? maskTelefone(telDigitos) : null,
         },
       },
     });
@@ -165,11 +177,11 @@ export default function Login() {
           </>
         ) : (
           <>
-            <input placeholder="nome completo" value={nome} onChange={(e) => setNome(e.target.value)} style={campoStyle} />
+            <input placeholder="nome completo" value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="off" style={campoStyle} />
             <input type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} style={campoStyle} />
             <div style={{ display: "flex", gap: 8 }}>
-              <input type="password" placeholder="senha" value={senha} onChange={(e) => setSenha(e.target.value)} style={{ ...campoStyle, flex: 1 }} />
-              <input type="password" placeholder="confirmar" value={confSenha} onChange={(e) => setConfSenha(e.target.value)} style={{ ...campoStyle, flex: 1 }} />
+              <input type="password" placeholder="senha" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="new-password" style={{ ...campoStyle, flex: 1 }} />
+              <input type="password" placeholder="confirmar" value={confSenha} onChange={(e) => setConfSenha(e.target.value)} autoComplete="new-password" style={{ ...campoStyle, flex: 1 }} />
             </div>
 
             <div style={{ textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C87A3", margin: "10px 0 5px" }}>Data de nascimento</div>
@@ -188,13 +200,17 @@ export default function Login() {
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ flex: 1, textAlign: "left" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#7C87A3", marginBottom: 5 }}>Altura (cm)</div>
-                <input inputMode="numeric" placeholder="178" value={altura} onChange={(e) => setAltura(e.target.value.replace(/\D/g, ""))} style={campoStyle} />
+                <input inputMode="numeric" placeholder="178" value={altura} onChange={(e) => setAltura(e.target.value.replace(/\D/g, ""))} autoComplete="off" style={campoStyle} />
               </div>
               <div style={{ flex: 1, textAlign: "left" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#7C87A3", marginBottom: 5 }}>Peso atual (kg)</div>
-                <input inputMode="decimal" placeholder="82" value={peso} onChange={(e) => setPeso(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))} style={campoStyle} />
+                <input inputMode="decimal" placeholder="82" value={peso} onChange={(e) => setPeso(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))} autoComplete="off" style={campoStyle} />
               </div>
             </div>
+
+            <div style={{ textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C87A3", margin: "10px 0 5px" }}>Celular (opcional)</div>
+            <input inputMode="numeric" placeholder="+55 (11) 98765-4321" value={maskTelefone(telDigitos)}
+              onChange={(e) => setTelDigitos(e.target.value.replace(/\D/g, ""))} style={campoStyle} />
 
             {erro && <div style={{ fontSize: 12.5, color: "#D31E43", margin: "8px 0", textAlign: "left" }}>{erro}</div>}
 
