@@ -266,7 +266,7 @@ const CSS = `
 --lime:#5FC36A;--lime-d:#2E8B48;--lime-s:#E6F7E9;
 --orange:#F5A623;--orange-d:#B87409;--orange-s:#FEF3DE;
 --violet:#7B61FF;--violet-d:#5138D6;--violet-s:#EDE9FF;
---blue:#3B9FE0;--blue-d:#1B6FA8;--blue-s:#E3F3FC;
+--blue:#3B9FE0;--blue-d:#0B4568;--blue-s:#E3F3FC;
 background:var(--bg);color:var(--ink);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
 min-height:100%;padding:14px 14px 88px;-webkit-font-smoothing:antialiased;position:relative;letter-spacing:-.01em}
 .nx{max-width:480px;margin:0 auto}
@@ -362,6 +362,7 @@ export default function Nutri() {
   const [modeloOpen, setModeloOpen] = useState(false);
   const [copiarFuturoMeal, setCopiarFuturoMeal] = useState(null);
   const [fotoHeader, setFotoHeader] = useState(null);
+  const [condensado, setCondensado] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
   const [favoritarMeal, setFavoritarMeal] = useState(null);
   const [usarFavoritaMeal, setUsarFavoritaMeal] = useState(null);
@@ -371,7 +372,7 @@ export default function Nutri() {
 
   useEffect(() => {
     (async () => {
-      const vazio = { config: CONFIG_PADRAO, favs: [], custom: [], recentes: [], days: {}, pesos: {}, sono: {}, medicoes: {}, altura: null, fotosIndex: {}, examesCampos: [], exames: {}, exameContexto: {}, medicamentoHistorico: {}, suplementoHistorico: {}, refeicoesFavoritas: [], tendenciasRazoes: [] };
+      const vazio = { config: CONFIG_PADRAO, favs: [], custom: [], recentes: [], days: {}, pesos: {}, sono: {}, medicoes: {}, altura: null, fotosIndex: {}, examesCampos: [], exames: {}, exameContexto: {}, medicamentoHistorico: {}, suplementoHistorico: {}, medidasPeriodicidade: [], fotosPeriodicidade: [], refeicoesFavoritas: [], tendenciasRazoes: [] };
       try {
         const r = await window.storage.get(KEY);
         const p = JSON.parse(r.value);
@@ -446,6 +447,14 @@ export default function Nutri() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (tab !== "dia") { setCondensado(false); return; }
+    const aoRolar = () => setCondensado(window.scrollY > 90);
+    window.addEventListener("scroll", aoRolar, { passive: true });
+    aoRolar();
+    return () => window.removeEventListener("scroll", aoRolar);
+  }, [tab]);
+
   if (!data) return <div className="nx"><style>{CSS}</style><style>{CSS_STICKY}</style><div className="eb">Carregando…</div></div>;
   const shift = (k) => { const d = fromIso(day); d.setDate(d.getDate() + k); setDay(iso(d)); };
 
@@ -468,6 +477,13 @@ export default function Nutri() {
                 <span style={{ fontSize: 11.5, fontWeight: 700 }}>{cfg.refeicoesModelos.find((r) => r.id === modeloHojeId)?.nome || "Dieta"}</span>
               </button>
 
+              {itemDue(data.medidasPeriodicidade, day) && (
+                <span className="pill" style={{ background: "var(--orange-s)", color: "var(--orange-d)", flex: "0 0 auto" }}>📏 Medida hoje</span>
+              )}
+              {itemDue(data.fotosPeriodicidade, day) && (
+                <span className="pill" style={{ background: "var(--orange-s)", color: "var(--orange-d)", flex: "0 0 auto" }}>📸 Foto hoje</span>
+              )}
+
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", flex: "0 0 auto" }}>
                 <button className="mini" onClick={() => shift(-1)} aria-label="Dia anterior">←</button>
                 <span style={{ fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{label(day)}</span>
@@ -483,6 +499,7 @@ export default function Nutri() {
             </div>
 
             <PainelTopo
+              compacto={condensado}
               pesos={data.pesos || {}} day={day}
               onSetPeso={(kg) => persist({ ...data, pesos: { ...(data.pesos || {}), [day]: kg } })}
               sono={data.sono || {}} onSetSono={(h) => persist({ ...data, sono: { ...(data.sono || {}), [day]: h } })}
@@ -525,7 +542,7 @@ export default function Nutri() {
               onMarcLista={(l) => persist({ ...data, config: { ...cfg, marcadores: l } })}
             />
 
-            <LinhaMacros tot={tot} cfg={metaHoje} agua={dia.agua || 0} metaAgua={refModeloPadrao.metaAgua || 2500} />
+            <LinhaMacros tot={tot} cfg={metaHoje} agua={dia.agua || 0} metaAgua={refModeloPadrao.metaAgua || 2500} compacto={condensado} />
 
           <div style={{ height: 20, borderBottom: "1px solid var(--rule)", marginBottom: 20 }} />
 
@@ -581,7 +598,7 @@ export default function Nutri() {
       {tab === "cfg" && <Ajustes data={data} cfg={cfg} persist={persist} flash={flash} />}
 
       <div className="nav">
-        {[["dia", "Diário", I_HOME], ["hist", "Histórico", I_CHART], ["cfg", "Definições", I_GEAR], ["perfil", "Perfil", I_USER]].map(([k, v, d]) => (
+        {[["dia", "Diário", I_HOME], ["hist", "Evolução", I_CHART], ["cfg", "Definições", I_GEAR], ["perfil", "Perfil", I_USER]].map(([k, v, d]) => (
           <button key={k} data-on={tab === k ? "1" : "0"} onClick={() => setTab(k)}>
             <Ico d={d} />{v}
           </button>
@@ -616,6 +633,7 @@ export default function Nutri() {
 
       {vozOpen && (
         <VozPanel meals={dia.meals} mealFixo={typeof vozOpen === "string" ? vozOpen : null}
+          favs={data.favs || []} recentes={data.recentes || []}
           onClose={() => setVozOpen(false)}
           onLancar={(mealId, itens) => { addItens(mealId, itens); setVozOpen(false); }} />
       )}
@@ -683,7 +701,7 @@ export default function Nutri() {
 }
 
 /* ---------- suplementos: fino, no topo, expansível, editável ---------- */
-function PainelTopo({ pesos, day, onSetPeso, sono, onSetSono, medLista, medMarcados, medHistorico, onToggleMed, suppLista, suppMarcados, suppHistorico, onToggleSupp, marcLista, marcValores, onMarcValor, onMarcLista }) {
+function PainelTopo({ pesos, day, onSetPeso, sono, onSetSono, medLista, medMarcados, medHistorico, onToggleMed, suppLista, suppMarcados, suppHistorico, onToggleSupp, marcLista, marcValores, onMarcValor, onMarcLista, compacto }) {
   const [aberto, setAberto] = useState(null);
 
   const medHoje = medLista.filter((m) => itemDue((medHistorico || {})[m.id], day));
@@ -695,19 +713,19 @@ function PainelTopo({ pesos, day, onSetPeso, sono, onSetSono, medLista, medMarca
 
   const Mini = ({ k, icone, titulo, valor, cor }) => (
     <button onClick={() => setAberto(aberto === k ? null : k)}
-      style={{ flex: 1, background: aberto === k ? "var(--ink)" : "var(--card)", borderRadius: 12, padding: "9px 4px",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 2, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
-      <span style={{ fontSize: 14 }}>{icone}</span>
-      <span style={{ fontSize: 9, fontWeight: 700, color: aberto === k ? "#fff" : "var(--ink)" }}>{titulo}</span>
-      <span style={{ fontSize: 9.5, fontWeight: 800, color: aberto === k ? "#fff" : (cor || "var(--ink2)") }}>{valor}</span>
+      style={{ flex: 1, background: aberto === k ? "var(--ink)" : "var(--card)", borderRadius: 12, padding: compacto ? "7px 2px" : "10px 2px",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: compacto ? 1 : 3, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
+      {!compacto && <span style={{ fontSize: 17 }}>{icone}</span>}
+      <span style={{ fontSize: 11, fontWeight: 700, color: aberto === k ? "#fff" : "var(--ink)" }}>{titulo}</span>
+      <span style={{ fontSize: 12, fontWeight: 800, color: aberto === k ? "#fff" : (cor || "var(--ink2)") }}>{valor}</span>
     </button>
   );
 
   return (
     <div style={{ marginBottom: 10 }}>
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 5 }}>
         <Mini k="peso" icone="⚖️" titulo="Peso" valor={pesos[day] != null ? `${n1(pesos[day])}kg` : "—"} />
-        <Mini k="sono" icone="😴" titulo="Sono" valor={sono[day] != null ? `${n1(sono[day])}h` : "—"} />
+        <Mini k="sono" icone="😴" titulo="Sono" valor={sono[day] || "—"} />
         <Mini k="med" icone="💊" titulo="Meds" valor={`${medFeito}/${medHoje.length}`} cor={medFeito === medHoje.length && medHoje.length ? "var(--lime-d)" : "var(--ink2)"} />
         <Mini k="supp" icone="💪" titulo="Supl" valor={`${suppFeito}/${suppHoje.length}`} cor={suppFeito === suppHoje.length && suppHoje.length ? "var(--lime-d)" : "var(--ink2)"} />
         <Mini k="humor" icone="😊" titulo="Humor" valor={marcMedia != null ? `${marcMedia.toFixed(1)}/5` : "—"} cor={marcMedia != null ? "var(--violet-d)" : "var(--ink2)"} />
@@ -774,23 +792,22 @@ function PesoConteudo({ pesos, day, onSet }) {
 }
 
 function SonoConteudo({ sono, day, onSet }) {
-  const [val, setVal] = useState(sono[day] != null ? String(sono[day]) : "");
-  useEffect(() => { setVal(sono[day] != null ? String(sono[day]) : ""); }, [day, sono]);
+  const [val, setVal] = useState(sono[day] || "");
+  useEffect(() => { setVal(sono[day] || ""); }, [day, sono]);
 
   const entradas = Object.keys(sono).sort().reverse().slice(0, 10);
 
   return (
     <div>
       <div style={{ display: "flex", gap: 6, marginBottom: 11 }}>
-        <input className="num" inputMode="decimal" placeholder="horas" value={val}
-          onChange={(e) => setVal(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))}
+        <input type="time" value={val} onChange={(e) => setVal(e.target.value)}
           style={{ flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" }} />
-        <button className="ghost" disabled={!val} onClick={() => onSet(Number(val))}>salvar</button>
+        <button className="ghost" disabled={!val} onClick={() => onSet(val)}>salvar</button>
       </div>
       {entradas.map((d, i) => (
         <div key={d} className="row" style={{ padding: "6px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
           <span style={{ fontSize: 12.5 }}>{label(d)}</span>
-          <span className="num" style={{ fontSize: 12.5, fontWeight: 700 }}>{n1(sono[d])} h</span>
+          <span className="num" style={{ fontSize: 12.5, fontWeight: 700 }}>{sono[d]}</span>
         </div>
       ))}
     </div>
@@ -916,6 +933,104 @@ function Marcadores({ lista, valores, onValor, onLista, embutido }) {
   );
 }
 
+function PeriodicidadeStrip({ titulo, icone, historico, onNovo }) {
+  const [open, setOpen] = useState(false);
+  const [novo, setNovo] = useState(false);
+  const [histAberto, setHistAberto] = useState(false);
+  const hoje = iso(new Date());
+  const ativa = doseNaData(historico, hoje);
+  const due = itemDue(historico, hoje);
+  const [form, setForm] = useState({ data: hoje, cadaDias: "7", horario: "", excecao: "manter" });
+
+  function abrir() {
+    setForm({
+      data: hoje, cadaDias: ativa ? String(ativa.cadaDias || 7) : "7",
+      horario: ativa ? (ativa.horario || "") : "", excecao: ativa ? (ativa.excecao || "manter") : "manter",
+    });
+    setNovo(true);
+  }
+  function salvar() {
+    const semEssaData = (historico || []).filter((h) => h.data !== form.data);
+    const nova = { data: form.data, cadaDias: Math.max(1, n0(form.cadaDias) || 1), horario: form.horario, excecao: form.excecao };
+    onNovo([...semEssaData, nova].sort((a, b) => a.data.localeCompare(b.data)));
+    setNovo(false);
+  }
+
+  const hist = (historico || []).slice().sort((a, b) => b.data.localeCompare(a.data));
+
+  return (
+    <div className="strip" style={{ marginBottom: 11 }}>
+      <button className="stripBtn" onClick={() => setOpen(!open)}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 14 }}>{icone}</span>
+          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{titulo}</span>
+          {ativa ? (
+            <span className="pill" style={{ background: due ? "var(--orange-s)" : "var(--rule)", color: due ? "var(--orange-d)" : "var(--ink2)" }}>
+              {due ? "hoje" : `a cada ${ativa.cadaDias}d`}
+            </span>
+          ) : (
+            <span className="pill" style={{ background: "var(--coral-s)", color: "var(--coral-d)" }}>sem periodicidade</span>
+          )}
+        </div>
+        <span style={{ color: "var(--ink3)", fontSize: 12 }}>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {ativa && (
+            <div className="eb" style={{ marginBottom: 9, lineHeight: 1.5 }}>
+              A cada {ativa.cadaDias} dias, a partir de {label(ativa.data)}{ativa.horario ? ` · ${ativa.horario}` : ""} — {ativa.excecao === "recalcular" ? "recalcula o ciclo" : "mantém o cronograma"} se registrado fora do dia.
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 6 }}>
+            <button style={{ flex: 1, background: "var(--violet-s)", color: "var(--violet-d)", padding: "7px 10px", borderRadius: 9, fontSize: 12.5, fontWeight: 700 }} onClick={abrir}>
+              + nova marcação
+            </button>
+            {hist.length > 0 && <button className="mini" onClick={() => setHistAberto(!histAberto)}>{histAberto ? "ocultar" : "histórico"}</button>}
+          </div>
+          {histAberto && (
+            <div style={{ marginTop: 8 }}>
+              {hist.map((h, i) => (
+                <div key={h.data} style={{ padding: "6px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
+                  <div className="row">
+                    <span className="eb">{label(h.data)}</span>
+                    <span className="num" style={{ fontSize: 12 }}>a cada {h.cadaDias}d{h.horario ? ` · ${h.horario}` : ""}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {novo && (
+        <div className="sheet">
+          <div className="row" style={{ marginBottom: 16 }}>
+            <span style={{ fontSize: 17, fontWeight: 700 }}>{titulo} · nova marcação</span>
+            <button className="ghost" onClick={() => setNovo(false)}>fechar</button>
+          </div>
+          <div className="eb" style={{ marginBottom: 5, fontWeight: 700 }}>Válido a partir de</div>
+          <input type="date" value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} style={{ marginBottom: 14 }} />
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 14 }}>
+            <span className="eb" style={{ whiteSpace: "nowrap", fontWeight: 700 }}>a cada</span>
+            <input className="num" inputMode="numeric" value={form.cadaDias} style={{ width: 60, textAlign: "center", fontWeight: 700 }}
+              onChange={(e) => setForm({ ...form, cadaDias: e.target.value.replace(/\D/g, "") })} />
+            <span className="eb" style={{ fontWeight: 700 }}>dias</span>
+          </div>
+          <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Horário (opcional)</div>
+          <input placeholder="hh:mm" value={form.horario} onChange={(e) => setForm({ ...form, horario: e.target.value })} style={{ marginBottom: 14 }} />
+          <div className="eb" style={{ marginBottom: 5, fontWeight: 700 }}>Se registrar fora do dia previsto</div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+            <button className="chip" data-on={form.excecao === "recalcular" ? "1" : "0"} onClick={() => setForm({ ...form, excecao: "recalcular" })}>recalcular ciclo</button>
+            <button className="chip" data-on={form.excecao !== "recalcular" ? "1" : "0"} onClick={() => setForm({ ...form, excecao: "manter" })}>manter cronograma</button>
+          </div>
+          <button className="cta" onClick={salvar}>Salvar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ItemDoseStrip({ titulo, icone, lista, historico, onLista, onDose, novoNome }) {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState(false);
@@ -983,8 +1098,9 @@ function ItemDoseStrip({ titulo, icone, lista, historico, onLista, onDose, novoN
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button className="ghost" style={{ flex: 1 }} onClick={() => abrirNovaDose(m)}>nova dose</button>
-                      {hist.length > 0 && <button className="ghost" onClick={() => setHistAberto(histAberto === m.id ? null : m.id)}>{histAberto === m.id ? "ocultar" : "histórico"}</button>}
+                      <button style={{ flex: 1, background: "var(--violet-s)", color: "var(--violet-d)", padding: "7px 10px", borderRadius: 9, fontSize: 12.5, fontWeight: 700 }}
+                        onClick={() => abrirNovaDose(m)}>+ nova dose</button>
+                      {hist.length > 0 && <button className="mini" onClick={() => setHistAberto(histAberto === m.id ? null : m.id)}>{histAberto === m.id ? "ocultar" : "histórico"}</button>}
                     </div>
                   </>
                 )}
@@ -1118,6 +1234,44 @@ function SecaoPeso({ pesos, dataInicio, dataFim }) {
   );
 }
 
+function SecaoSono({ sono, dataInicio, dataFim }) {
+  const datas = Object.keys(sono).filter((d) => d >= dataInicio && d <= dataFim).sort();
+  const paraHoras = (hhmm) => { const [h, m] = String(hhmm).split(":").map(Number); return h + (m || 0) / 60; };
+  const chartData = datas.map((d) => ({ data: label(d).slice(0, 6), h: paraHoras(sono[d]) }));
+
+  return (
+    <div style={{ marginBottom: 4 }}>
+      {chartData.length >= 2 && (
+        <div className="card" style={{ padding: 14, marginBottom: 10 }}>
+          <div style={{ width: "100%", height: 130 }}>
+            <ResponsiveContainer>
+              <LineChart data={chartData} margin={{ top: 4, right: 6, left: -22, bottom: 0 }}>
+                <CartesianGrid stroke="var(--rule)" vertical={false} />
+                <XAxis dataKey="data" tick={{ fontSize: 9.5, fill: "var(--ink2)" }} axisLine={{ stroke: "var(--rule)" }} tickLine={false} />
+                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 9.5, fill: "var(--ink2)" }} axisLine={false} tickLine={false} width={30} />
+                <Tooltip formatter={(v) => [`${n1(v)} h`, "Sono"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Line type="monotone" dataKey="h" stroke="var(--violet)" strokeWidth={2} dot={{ r: 2 }} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {datas.length > 0 && (
+        <div className="card" style={{ padding: "4px 15px 8px", marginTop: 10 }}>
+          {datas.slice().reverse().map((d, i) => (
+            <div key={d} className="row" style={{ padding: "7px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
+              <span style={{ fontSize: 12.5 }}>{label(d)}</span>
+              <span className="num" style={{ fontSize: 12.5, fontWeight: 700 }}>{sono[d]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {datas.length === 0 && <div className="eb" style={{ padding: "8px 0" }}>Nenhum registro de sono no período.</div>}
+    </div>
+  );
+}
+
 function MedicoesTabela({ medicoes }) {
   const datas = Object.keys(medicoes).sort();
   const campos = MEDIDAS_CAMPOS.filter((c) => datas.some((d) => medicoes[d][c.key] != null));
@@ -1214,32 +1368,32 @@ function Pills({ m, metas }) {
 
 /* ---------- resumo do dia ---------- */
 /* ---------- linha de macros do dia ---------- */
-function LinhaMacros({ tot, cfg, agua, metaAgua }) {
+function LinhaMacros({ tot, cfg, agua, metaAgua, compacto }) {
   const [aberto, setAberto] = useState(false);
   const over = tot.kcal > cfg.kcal;
   const pctKcal = Math.min(100, (tot.kcal / (cfg.kcal || 1)) * 100);
 
   const Mini = ({ icone, titulo, valor, meta, cor }) => (
     <button onClick={() => setAberto(!aberto)}
-      style={{ flex: 1, background: "var(--card)", borderRadius: 12, padding: "9px 4px",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 2, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
-      <span style={{ fontSize: 14 }}>{icone}</span>
-      <span style={{ fontSize: 9, fontWeight: 700, color: "var(--ink)" }}>{titulo}</span>
-      <span className="num" style={{ fontSize: 9.5, fontWeight: 800, color: cor || "var(--ink2)" }}>{fmt(valor)}/{fmt(meta)}</span>
+      style={{ flex: 1, background: "var(--card)", borderRadius: 12, padding: compacto ? "7px 2px" : "10px 2px",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: compacto ? 1 : 3, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
+      {!compacto && <span style={{ fontSize: 17 }}>{icone}</span>}
+      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink)" }}>{titulo}</span>
+      <span className="num" style={{ fontSize: 12, fontWeight: 800, color: cor || "var(--ink2)" }}>{fmt(valor)}/{fmt(meta)}</span>
     </button>
   );
 
   return (
     <div style={{ marginBottom: 10 }}>
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 5 }}>
         <Mini icone="🔥" titulo="Kcal" valor={tot.kcal} meta={cfg.kcal} cor={over ? "var(--coral-d)" : "var(--ink)"} />
         {MACROS.map((x) => <Mini key={x.k} icone={x.icone} titulo={x.nome} valor={tot[x.k]} meta={cfg[x.k]} cor={x.txt} />)}
-        <div style={{ flex: 1, background: "var(--blue-s)", borderRadius: 12, padding: "9px 4px",
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-          <span style={{ fontSize: 14 }}>💧</span>
-          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--blue-d)" }}>Água</span>
-          <span className="num" style={{ fontSize: 9.5, fontWeight: 800, color: "var(--blue-d)" }}>{((agua || 0) / 1000).toFixed(1)}/{((metaAgua || 2500) / 1000).toFixed(1)}L</span>
-        </div>
+        <button onClick={() => setAberto(!aberto)} style={{ flex: 1, background: "var(--blue-s)", borderRadius: 12, padding: compacto ? "7px 2px" : "10px 2px",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: compacto ? 1 : 3 }}>
+          {!compacto && <span style={{ fontSize: 17 }}>💧</span>}
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--blue-d)" }}>Água</span>
+          <span className="num" style={{ fontSize: 12, fontWeight: 800, color: "var(--blue-d)" }}>{((agua || 0) / 1000).toFixed(1)}/{((metaAgua || 2500) / 1000).toFixed(1)}L</span>
+        </button>
       </div>
 
       {aberto && (
@@ -1270,6 +1424,16 @@ function LinhaMacros({ tot, cfg, agua, metaAgua }) {
               </div>
             );
           })}
+          <div style={{ marginBottom: 0 }}>
+            <div className="row" style={{ marginBottom: 5 }}>
+              <span className="eb" style={{ fontWeight: 700, color: "var(--blue-d)" }}>💧 Água</span>
+              <span className="num" style={{ fontSize: 12.5, fontWeight: 800, color: "var(--blue-d)" }}>{n0(Math.min(100, ((agua || 0) / (metaAgua || 1)) * 100))}%</span>
+            </div>
+            <div className="eb" style={{ marginBottom: 5 }}>{((agua || 0) / 1000).toFixed(2)} / {((metaAgua || 2500) / 1000).toFixed(2)} L</div>
+            <div className="track" style={{ background: "var(--blue-s)", height: 7 }}>
+              <div className="fill" style={{ width: `${Math.min(100, ((agua || 0) / (metaAgua || 1)) * 100)}%`, background: "var(--blue)" }} />
+            </div>
+          </div>
           <button className="ghost" style={{ width: "100%", marginTop: 14 }} onClick={() => setAberto(false)}>recolher</button>
         </div>
       )}
@@ -1667,7 +1831,7 @@ Responda só JSON, sem markdown:
 }
 
 /* ---------- voz ---------- */
-function VozPanel({ meals, mealFixo, onClose, onLancar }) {
+function VozPanel({ meals, mealFixo, favs, recentes, onClose, onLancar }) {
   const [txt, setTxt] = useState("");
   const [ouvindo, setOuvindo] = useState(false);
   const [proc, setProc] = useState(false);
@@ -1705,19 +1869,32 @@ function VozPanel({ meals, mealFixo, onClose, onLancar }) {
     parar(); setProc(true); setErro("");
     try {
       const nomes = meals.map((m) => m.nome).join(" | ");
+      const favsTxt = (favs || []).slice(0, 50).map((f) => `${f.nome} — ${n1(f.kcal)}kcal/${n1(f.prot)}p/${n1(f.carb)}c/${n1(f.gord)}g por 100g`).join("\n");
+      const recentesTxt = (recentes || []).slice(0, 30).map((f) => f.nome).join(", ");
       const r = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-5", max_tokens: 1400,
+          model: "claude-sonnet-5", max_tokens: 1600,
           messages: [{ role: "user", content: `Ditado de registro alimentar brasileiro: "${txt}"
 
 Refeições disponíveis: ${nomes}
 
-1) Identifique em qual refeição lançar. Use exatamente um dos nomes acima, ou null se não foi dito.
-2) Liste os alimentos, com QUANTIDADE em gramas e composição POR 100 g.
-Porções: pão francês 50 g · ovo 50 g · colher sopa de arroz 25 g · concha de feijão 80 g · filé de frango 120 g · scoop de whey 30 g · banana 100 g.
+ALIMENTOS FAVORITOS do usuário (verifique aqui PRIMEIRO — se o que foi dito corresponder, mesmo com nome diferente/coloquial, use exatamente estes valores por 100g, não recalcule):
+${favsTxt || "(nenhum cadastrado ainda)"}
 
-Só JSON, sem markdown:
+Consumidos recentemente (segunda prioridade de busca, mesma lógica):
+${recentesTxt || "(nenhum ainda)"}
+
+Como interpretar:
+1. Primeiro tente casar cada alimento dito com um item da lista de favoritos acima. Considere sinônimos e jeitos diferentes de falar a mesma coisa.
+2. Se não achar, tente casar com os recentes.
+3. Só se não achar em nenhum dos dois, calcule você mesmo com seu conhecimento nutricional — incluindo marcas comerciais brasileiras específicas quando citadas (ex.: "biscoito Maisena Piraquê" tem valores diferentes de um maisena genérico; use o rótulo real da marca quando souber).
+4. Entenda quantidade descrita de forma cotidiana, não só em gramas: "uma coxinha de frango de uns 60 gramas" = 60 g; "6 biscoitos maisena" = converta pela unidade típica daquele biscoito (ou da marca citada) × 6. Sempre chegue num total em gramas.
+5. Identifique em qual refeição lançar (exatamente um dos nomes acima, ou null se não foi dito).
+
+Porções comuns de referência, quando não houver algo mais específico: pão francês 50 g · ovo 50 g · colher de sopa de arroz 25 g · concha de feijão 80 g · filé de frango 120 g · coxinha de frango de padaria ~70 g · scoop de whey 30 g · banana 100 g · biscoito tipo maisena ~7 g/unidade.
+
+Responda só com JSON, sem markdown, com a composição POR 100 g de cada alimento (não o total já calculado):
 {"refeicao":"Almoço","itens":[{"nome":"Arroz branco cozido","g":150,"kcal":128,"prot":2.5,"carb":28,"gord":0.2}]}` }],
         }),
       });
@@ -2110,6 +2287,7 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
   const hojeIso = iso(new Date());
   const [preset, setPreset] = useState("14d");
   const [abertoPeso, setAbertoPeso] = useState(false);
+  const [abertoSono, setAbertoSono] = useState(false);
   const [abertoAlim, setAbertoAlim] = useState(false);
   const [abertoMedidas, setAbertoMedidas] = useState(false);
   const [abertoExames, setAbertoExames] = useState(false);
@@ -2172,13 +2350,19 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
   return (
     <>
       <div className="row" style={{ marginBottom: 14 }}>
-        <span style={{ fontSize: 19, fontWeight: 800 }}>Histórico</span>
+        <span style={{ fontSize: 19, fontWeight: 800 }}>Evolução</span>
       </div>
 
       <FaixaHistorico icone="⚖️" titulo="Evolução de peso" contagem={Object.keys(data.pesos || {}).filter((d) => d >= dataInicio && d <= dataFim).length}
         aberto={abertoPeso} onToggle={() => setAbertoPeso(!abertoPeso)}>
         <SeletorPeriodo preset={preset} aplicarPreset={aplicarPreset} setPreset={setPreset} dataInicio={dataInicio} setDataInicio={setDataInicio} dataFim={dataFim} setDataFim={setDataFim} />
         <SecaoPeso pesos={data.pesos || {}} dataInicio={dataInicio} dataFim={dataFim} />
+      </FaixaHistorico>
+
+      <FaixaHistorico icone="😴" titulo="Evolução de sono" contagem={Object.keys(data.sono || {}).filter((d) => d >= dataInicio && d <= dataFim).length}
+        aberto={abertoSono} onToggle={() => setAbertoSono(!abertoSono)}>
+        <SeletorPeriodo preset={preset} aplicarPreset={aplicarPreset} setPreset={setPreset} dataInicio={dataInicio} setDataInicio={setDataInicio} dataFim={dataFim} setDataFim={setDataFim} />
+        <SecaoSono sono={data.sono || {}} dataInicio={dataInicio} dataFim={dataFim} />
       </FaixaHistorico>
 
       <FaixaHistorico icone="🍽️" titulo="Evolução de alimentação" contagem={reg.length}
@@ -3205,12 +3389,14 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
 
       <div className="card" style={{ padding: 18, marginBottom: 11 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <label style={{ display: "block", cursor: "pointer", flex: "0 0 auto" }}>
-            <div style={{ width: 84, height: 84, borderRadius: 999, background: "var(--coral-s)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", border: "2px solid var(--rule)" }}>
-              {!carregando && foto ? <img src={foto} alt="Perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 28, fontWeight: 800, color: "var(--coral-d)" }}>P</span>}
+          <label style={{ display: "block", cursor: "pointer", flex: "0 0 auto", position: "relative" }}>
+            <div style={{ width: 100, height: 100, borderRadius: 999, background: "var(--coral-s)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", border: "2px solid var(--rule)" }}>
+              {!carregando && foto ? <img src={foto} alt="Perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 32, fontWeight: 800, color: "var(--coral-d)" }}>P</span>}
             </div>
             <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => e.target.files && e.target.files[0] && trocarFoto(e.target.files[0])} />
-            <div className="eb" style={{ color: "var(--coral-d)", fontWeight: 700, marginTop: 5, textAlign: "center", fontSize: 9.5 }}>{foto ? "trocar" : "adicionar"}</div>
+            <span style={{ position: "absolute", left: "50%", bottom: 8, transform: "translateX(-50%)", background: "var(--coral)", color: "#fff", fontWeight: 700, fontSize: 10.5, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>
+              {foto ? "trocar" : "adicionar"}
+            </span>
           </label>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Pedro Hungria</div>
@@ -3252,24 +3438,6 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
         </div>
       )}
 
-      <div className="strip" style={{ marginBottom: 11 }}>
-        <button className="stripBtn" onClick={() => setAbertoMeta(!abertoMeta)}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 14 }}>🎯</span>
-            <span style={{ fontSize: 13.5, fontWeight: 600 }}>Minha meta</span>
-          </div>
-          <span style={{ color: "var(--ink3)", fontSize: 12 }}>{abertoMeta ? "▲" : "▼"}</span>
-        </button>
-        {abertoMeta && (
-          <div style={{ marginTop: 10 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 600, marginBottom: 8 }}>{refModeloPadrao.nome}</div>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              <span className="pill" style={{ background: "var(--rule)", color: "var(--ink)" }}>{fmt(metaTotal.kcal)} kcal</span>
-              <Pills m={metaTotal} />
-            </div>
-          </div>
-        )}
-      </div>
       <div className="strip" style={{ marginBottom: 11 }}>
         <button className="stripBtn" onClick={() => setAbertoPesoP(!abertoPesoP)}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
@@ -3352,6 +3520,16 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
             </button>
           </div>
         )}
+      </div>
+
+      <div className="strip" style={{ marginBottom: 11, opacity: .6 }}>
+        <div className="stripBtn" style={{ cursor: "default" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14 }}>🎯</span>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>Minha meta</span>
+            <span className="pill" style={{ background: "var(--violet-s)", color: "var(--violet-d)" }}>em breve</span>
+          </div>
+        </div>
       </div>
 
       {verFotos && (
@@ -3502,6 +3680,12 @@ function Ajustes({ data, cfg, persist, flash }) {
       <div style={{ marginBottom: 11 }}>
         <Marcadores lista={cfg.marcadores} valores={{}} onValor={() => {}} onLista={(l) => set({ marcadores: l })} />
       </div>
+
+      <PeriodicidadeStrip titulo="Medidas" icone="📏" historico={data.medidasPeriodicidade || []}
+        onNovo={(lista) => persist({ ...data, medidasPeriodicidade: lista })} />
+
+      <PeriodicidadeStrip titulo="Fotografias" icone="📸" historico={data.fotosPeriodicidade || []}
+        onNovo={(lista) => persist({ ...data, fotosPeriodicidade: lista })} />
     </>
   );
 }
@@ -3513,7 +3697,7 @@ function ModeloRefeicaoRow({ r, onRenomear, onPadrao, onExcluir, podeExcluir, on
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: open ? 10 : 0, flexWrap: "wrap" }}>
         <button onClick={() => setOpen(!open)} style={{ background: "transparent", padding: "4px 2px", color: "var(--ink2)" }}>{open ? "▾" : "▸"}</button>
         <input value={r.nome} style={{ flex: 1, minWidth: 90, padding: "8px 10px", fontSize: 13.5, fontWeight: 600 }} onChange={(e) => onRenomear(e.target.value)} />
-        <button className="ghost" data-on={r.padrao ? "1" : "0"} disabled={r.padrao} onClick={onPadrao}>{r.padrao ? "padrão" : "adotar como padrão"}</button>
+        <button style={{ background: "transparent", padding: "4px 6px", fontSize: 19, color: r.padrao ? "var(--orange)" : "var(--ink3)" }} onClick={onPadrao} aria-label={r.padrao ? "dieta favorita" : "tornar favorita"}>{r.padrao ? "★" : "☆"}</button>
         <button className="mini" disabled={!podeExcluir} onClick={onExcluir}>✕</button>
       </div>
       {open && (
