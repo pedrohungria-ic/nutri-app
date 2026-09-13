@@ -478,10 +478,10 @@ export default function Nutri() {
               </button>
 
               {itemDue(data.medidasPeriodicidade, day) && (
-                <span className="pill" style={{ background: "var(--orange-s)", color: "var(--orange-d)", flex: "0 0 auto" }}>📏 Medida hoje</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--coral-d)", background: "var(--coral-s)", borderRadius: 999, padding: "6px 10px", flex: "0 0 auto" }}>Medida</span>
               )}
               {itemDue(data.fotosPeriodicidade, day) && (
-                <span className="pill" style={{ background: "var(--orange-s)", color: "var(--orange-d)", flex: "0 0 auto" }}>📸 Foto hoje</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--coral-d)", background: "var(--coral-s)", borderRadius: 999, padding: "6px 10px", flex: "0 0 auto" }}>Fotografia</span>
               )}
 
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", flex: "0 0 auto" }}>
