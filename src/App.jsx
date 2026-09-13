@@ -296,7 +296,6 @@ width:56px;height:56px;border-radius:999px;background:var(--coral);color:#fff;fo
 display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(245,56,93,.4)}
 .nx .fab:active{transform:scale(.94)}
 .nx .fab[data-on="1"]{background:var(--ink)}
-.nx .congelado{position:sticky;top:0;z-index:44;background:var(--bg);padding-top:2px;margin-bottom:10px}
 .nx .fabMenu{position:fixed;right:20px;bottom:calc(146px + env(safe-area-inset-bottom));z-index:46;display:flex;flex-direction:column;gap:9px;align-items:flex-end}
 @media (min-width:540px){
   .nx .fab{right:calc(50% - 240px + 20px)}
@@ -456,8 +455,7 @@ export default function Nutri() {
 
       {tab === "dia" && (
         <>
-          <div className="congelado">
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, position: "relative", flexWrap: "wrap", rowGap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, position: "relative", flexWrap: "wrap", rowGap: 8 }}>
               <button onClick={() => setUserMenu(!userMenu)} style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", padding: 0, flex: "0 0 auto" }}>
                 <div style={{ width: 32, height: 32, borderRadius: 999, background: "var(--coral-s)", color: "var(--coral-d)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, overflow: "hidden", flex: "0 0 auto" }}>
                   {fotoHeader ? <img src={fotoHeader} alt="Pedro" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "P"}
@@ -530,7 +528,6 @@ export default function Nutri() {
 
             <CardAgua ml={dia.agua || 0} meta={refModeloPadrao.metaAgua || 2500}
               onAlterar={(delta) => setDia({ agua: Math.max(0, (dia.agua || 0) + delta) })} />
-          </div>
 
           <div style={{ height: 20, borderBottom: "1px solid var(--rule)", marginBottom: 20 }} />
 
@@ -579,7 +576,7 @@ export default function Nutri() {
         onSetPesoData={(dt, kg) => persist({ ...data, pesos: { ...(data.pesos || {}), [dt]: kg } })}
         razoes={data.tendenciasRazoes || []}
         onRazoes={(l) => persist({ ...data, tendenciasRazoes: l })} />}
-      {tab === "perfil" && <Perfil data={data} cfg={cfg} refModeloPadrao={refModeloPadrao} persist={persist} />}
+      {tab === "perfil" && <Perfil data={data} cfg={cfg} refModeloPadrao={refModeloPadrao} persist={persist} flash={flash} />}
       {tab === "cfg" && <Ajustes data={data} cfg={cfg} persist={persist} flash={flash} />}
 
       <div className="nav">
@@ -1254,14 +1251,14 @@ function CardAgua({ ml, meta, onAlterar }) {
   const pct = Math.min(100, (ml / (meta || 1)) * 100);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-      <div style={{ position: "relative", height: 24, flex: 1, background: "var(--blue-s)", borderRadius: 8, overflow: "hidden" }}>
+      <div style={{ position: "relative", height: 38, flex: 1, background: "var(--blue-s)", borderRadius: 10, overflow: "hidden" }}>
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: "var(--blue)" }} />
-        <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", padding: "0 9px", fontSize: 11, fontWeight: 700, color: "var(--blue-d)" }}>
+        <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", padding: "0 12px", fontSize: 13, fontWeight: 700, color: "var(--blue-d)" }}>
           💧 Água · {(ml / 1000).toFixed(2)}/{(meta / 1000).toFixed(2)}L
         </div>
       </div>
-      <button className="mini" style={{ fontSize: 16, padding: "2px 8px" }} onClick={() => onAlterar(-50)} aria-label="Menos 50ml">−</button>
-      <button className="mini" style={{ fontSize: 16, padding: "2px 8px" }} onClick={() => onAlterar(50)} aria-label="Mais 50ml">+</button>
+      <button className="mini" style={{ fontSize: 18, padding: "4px 10px" }} onClick={() => onAlterar(-50)} aria-label="Menos 50ml">−</button>
+      <button className="mini" style={{ fontSize: 18, padding: "4px 10px" }} onClick={() => onAlterar(50)} aria-label="Mais 50ml">+</button>
     </div>
   );
 }
@@ -1270,12 +1267,10 @@ function CardAgua({ ml, meta, onAlterar }) {
 function MealCard({ meal, clip, onAdd, onVoz, onSugerir, onPatch, onCopy, onPaste, onCopiarFuturo, onFavoritar, onUsarFavorita, onClear, onDelete }) {
   const [aberto, setAberto] = useState(false);
   const [menu, setMenu] = useState(false);
-  const [metas, setMetas] = useState(false);
   const t = somar(meal.items);
   const a = meal.alvo;
   const pct = a && a.kcal ? Math.min(100, (t.kcal / a.kcal) * 100) : 0;
   const over = a && a.kcal && t.kcal > a.kcal * 1.05;
-  const setAlvo = (f, v) => onPatch({ alvo: { kcal: 0, prot: 0, carb: 0, gord: 0, ...a, [f]: n0(v) } });
 
   if (!aberto) {
     return (
@@ -1311,7 +1306,6 @@ function MealCard({ meal, clip, onAdd, onVoz, onSugerir, onPatch, onCopy, onPast
         <button className="mini" onClick={() => setMenu(!menu)} aria-label="Opções">⋯</button>
         {menu && (
           <div className="menu" onMouseLeave={() => setMenu(false)}>
-            <button onClick={() => { setMetas(true); setMenu(false); }}>Editar metas</button>
             <button onClick={() => { onCopy(); setMenu(false); }}>Copiar dieta</button>
             <button style={{ opacity: clip ? 1 : .35 }} onClick={() => { if (clip) { onPaste(); setMenu(false); } }}>Colar {clip ? `“${clip.nome}”` : "—"}</button>
             <button onClick={() => { onCopiarFuturo(); setMenu(false); }}>Copiar para os próximos dias…</button>
@@ -1336,24 +1330,9 @@ function MealCard({ meal, clip, onAdd, onVoz, onSugerir, onPatch, onCopy, onPast
             <div className="fill" style={{ width: `${pct}%`, background: over ? "var(--coral)" : "var(--lime)" }} />
           </div>
         ) : null}
-        {metas ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
-            {[{ k: "kcal", lb: "kcal", bg: "#fff", txt: "var(--ink)" }, ...MACROS].map((x) => (
-              <div key={x.k}>
-                <div className="eb" style={{ marginBottom: 4, color: x.txt, fontWeight: 700 }}>{x.lb}</div>
-                <input className="num" inputMode="numeric" placeholder="—"
-                  style={{ padding: "8px 6px", fontSize: 13, background: x.bg === "#fff" ? "#fff" : x.bg, fontWeight: 700, textAlign: "center" }}
-                  value={a && a[x.k] ? a[x.k] : ""} onChange={(e) => setAlvo(x.k, e.target.value.replace(/\D/g, ""))} />
-              </div>
-            ))}
-            <button className="ghost" style={{ gridColumn: "span 4", marginTop: 2 }} onClick={() => setMetas(false)}>concluir metas</button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-            <Pills m={t} metas={a} />
-            <button className="mini" style={{ fontSize: 11, color: "var(--coral-d)", padding: "2px 6px" }} onClick={() => setMetas(true)}>editar metas</button>
-          </div>
-        )}
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+          <Pills m={t} metas={a} />
+        </div>
       </div>
 
       {(meal.items || []).map((it) => (
@@ -2053,9 +2032,31 @@ const SERIES_TENDENCIA = [
   { key: "pctMeta", nome: "% da meta (kcal)", unidade: "%", cor: "var(--violet-d)" },
 ];
 
+function FaixaHistorico({ icone, titulo, contagem, aberto, onToggle, children }) {
+  return (
+    <div className="strip" style={{ marginBottom: 11 }}>
+      <button className="stripBtn" onClick={onToggle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 14 }}>{icone}</span>
+          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{titulo}</span>
+          {contagem != null && <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>{contagem}</span>}
+        </div>
+        <span style={{ color: "var(--ink3)", fontSize: 12 }}>{aberto ? "▲" : "▼"}</span>
+      </button>
+      {aberto && <div style={{ marginTop: 10 }}>{children}</div>}
+    </div>
+  );
+}
+
 function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex, onExamesCampos, onSalvarExame, onExameContexto, onSetPesoData, razoes, onRazoes }) {
   const hojeIso = iso(new Date());
   const [preset, setPreset] = useState("14d");
+  const [abertoPeso, setAbertoPeso] = useState(false);
+  const [abertoAlim, setAbertoAlim] = useState(false);
+  const [abertoMedidas, setAbertoMedidas] = useState(false);
+  const [abertoExames, setAbertoExames] = useState(false);
+  const [abertoFotos, setAbertoFotos] = useState(false);
+  const [abertoAnalise, setAbertoAnalise] = useState(false);
   const [dataInicio, setDataInicio] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 13); return iso(d); });
   const [dataFim, setDataFim] = useState(hojeIso);
   const [ativos, setAtivos] = useState(["peso", "kcal"]);
@@ -2116,26 +2117,28 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
         <span style={{ fontSize: 19, fontWeight: 800 }}>Histórico</span>
       </div>
 
-      <SecaoPeso pesos={data.pesos || {}} dataInicio={dataInicio} dataFim={dataFim} />
+      <FaixaHistorico icone="⚖️" titulo="Evolução de peso" contagem={Object.keys(data.pesos || {}).filter((d) => d >= dataInicio && d <= dataFim).length}
+        aberto={abertoPeso} onToggle={() => setAbertoPeso(!abertoPeso)}>
+        <SecaoPeso pesos={data.pesos || {}} dataInicio={dataInicio} dataFim={dataFim} />
 
-      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
-        {[["hoje", "Hoje"], ["7d", "7d"], ["14d", "14d"], ["30d", "30d"]].map(([p, lb]) => (
-          <button key={p} className="chip" data-on={preset === p ? "1" : "0"} onClick={() => aplicarPreset(p)} style={{ padding: "6px 11px" }}>{lb}</button>
-        ))}
-        <button className="chip" data-on={preset === "personalizado" ? "1" : "0"} onClick={() => setPreset("personalizado")} style={{ padding: "6px 11px" }}>personalizado</button>
-      </div>
-      {preset === "personalizado" && (
-        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 16 }}>
-          <span className="eb">de</span>
-          <input type="date" value={dataInicio} max={dataFim} onChange={(e) => setDataInicio(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
-          <span className="eb">até</span>
-          <input type="date" value={dataFim} min={dataInicio} onChange={(e) => setDataFim(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+          {[["hoje", "Hoje"], ["7d", "7d"], ["14d", "14d"], ["30d", "30d"]].map(([p, lb]) => (
+            <button key={p} className="chip" data-on={preset === p ? "1" : "0"} onClick={() => aplicarPreset(p)} style={{ padding: "6px 11px" }}>{lb}</button>
+          ))}
+          <button className="chip" data-on={preset === "personalizado" ? "1" : "0"} onClick={() => setPreset("personalizado")} style={{ padding: "6px 11px" }}>personalizado</button>
         </div>
-      )}
+        {preset === "personalizado" && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span className="eb">de</span>
+            <input type="date" value={dataInicio} max={dataFim} onChange={(e) => setDataInicio(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+            <span className="eb">até</span>
+            <input type="date" value={dataFim} min={dataInicio} onChange={(e) => setDataFim(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+          </div>
+        )}
+      </FaixaHistorico>
 
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🍽️ Evolução de alimentação</div>
-
+      <FaixaHistorico icone="🍽️" titulo="Evolução de alimentação" contagem={reg.length}
+        aberto={abertoAlim} onToggle={() => setAbertoAlim(!abertoAlim)}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginBottom: 10 }}>
           {cards.map((c) => (
             <div key={c.lb} className="card" style={{ padding: 14, background: c.bg }}>
@@ -2187,37 +2190,37 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
             );
           })}
         </div>
-      </div>
+      </FaixaHistorico>
 
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>📏 Evolução de medidas</div>
+      <FaixaHistorico icone="📏" titulo="Evolução de medidas" contagem={Object.keys(data.medicoes || {}).length}
+        aberto={abertoMedidas} onToggle={() => setAbertoMedidas(!abertoMedidas)}>
         <MedicoesPanel medicoes={data.medicoes || {}} altura={data.altura} onAltura={onAltura}
           onSalvar={(dataChave, valores) => onSalvarMedicao(dataChave, valores)} />
         <div style={{ marginTop: 10 }}>
           <MedicoesTabela medicoes={data.medicoes || {}} />
         </div>
-      </div>
+      </FaixaHistorico>
 
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🧪 Evolução de exames</div>
+      <FaixaHistorico icone="🧪" titulo="Evolução de exames" contagem={Object.keys(data.exames || {}).length}
+        aberto={abertoExames} onToggle={() => setAbertoExames(!abertoExames)}>
         <ExamesPanel campos={data.examesCampos || []} exames={data.exames || {}} contextos={data.exameContexto || {}}
           onCampos={onExamesCampos} onSalvar={onSalvarExame} onContexto={onExameContexto} />
         <div style={{ marginTop: 10 }}>
           <ExamesTabela campos={data.examesCampos || []} exames={data.exames || {}} />
         </div>
-      </div>
+      </FaixaHistorico>
 
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>📸 Evolução de fotografias</div>
+      <FaixaHistorico icone="📸" titulo="Evolução de fotografias" contagem={Object.keys(data.fotosIndex || {}).length}
+        aberto={abertoFotos} onToggle={() => setAbertoFotos(!abertoFotos)}>
         <FotosPanel fotosIndex={data.fotosIndex || {}} onIndex={onFotosIndex} />
-      </div>
+      </FaixaHistorico>
 
-      <div style={{ height: 1, background: "var(--rule)", margin: "6px 0 18px" }} />
-      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>📊 Análise gráfica</div>
-
-      <Tendencias dias={dias} ativos={ativos} setAtivos={setAtivos} temMedidas={Object.keys(data.medicoes || {}).length > 0}
-        examesCampos={data.examesCampos || []} marcadores={cfg.marcadores || []} medicamentos={cfg.medicamentos || []}
-        razoes={razoes} onRazoes={onRazoes} />
+      <FaixaHistorico icone="📊" titulo="Análise gráfica" contagem={null}
+        aberto={abertoAnalise} onToggle={() => setAbertoAnalise(!abertoAnalise)}>
+        <Tendencias dias={dias} ativos={ativos} setAtivos={setAtivos} temMedidas={Object.keys(data.medicoes || {}).length > 0}
+          examesCampos={data.examesCampos || []} marcadores={cfg.marcadores || []} medicamentos={cfg.medicamentos || []}
+          razoes={razoes} onRazoes={onRazoes} />
+      </FaixaHistorico>
     </>
   );
 }
@@ -3024,7 +3027,7 @@ Responda APENAS com um JSON compacto, sem markdown, sem espaços supérfluos, ne
 }
 
 /* ---------- perfil ---------- */
-function Perfil({ data, cfg, refModeloPadrao, persist }) {
+function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
   const [foto, setFoto] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [alturaVal, setAlturaVal] = useState(data.altura ? String(data.altura) : "");
@@ -3077,6 +3080,79 @@ function Perfil({ data, cfg, refModeloPadrao, persist }) {
   const pesoDatas = Object.keys(data.pesos || {}).sort().slice(-60);
   const pesoChart = pesoDatas.map((d) => ({ data: label(d).slice(0, 6), kg: data.pesos[d] }));
   const metaTotal = somarAlvo(refModeloPadrao.meals);
+
+  function exportar() {
+    const L = [["data", "refeicao", "alimento", "gramas", "kcal", "prot_g", "carb_g", "gord_g", "fonte"]];
+    Object.keys(data.days || {}).sort().forEach((d) =>
+      ((data.days[d].meals) || []).forEach((m) =>
+        (m.items || []).forEach((i) => {
+          const c = calc(i);
+          L.push([d, m.nome, `"${(i.nome || "").replace(/"/g, "'")}"`, i.g, n0(c.kcal), n1(c.prot), n1(c.carb), n1(c.gord), i.fonte || ""]);
+        })));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([L.map((l) => l.join(",")).join("\n")], { type: "text/csv;charset=utf-8" }));
+    a.download = `nutri-${iso(new Date())}.csv`; a.click();
+  }
+
+  async function gerarDadosExemplo() {
+    if (!window.confirm("Isso vai adicionar medições, exames e fotos de exemplo (dados fictícios) só pra você ver as telas populadas. Pode fazer isso a qualquer momento, os dados de exemplo somam aos seus dados reais. Continuar?")) return;
+
+    const medicoesNovas = { ...(data.medicoes || {}) };
+    for (let s = 7; s >= 0; s--) {
+      const d = new Date(); d.setDate(d.getDate() - s * 7);
+      const key = iso(d);
+      medicoesNovas[key] = {
+        pescoco: n1(38 + Math.random() * 0.6),
+        ombro: n1(118 + Math.random()),
+        peito: n1(102 + (7 - s) * 0.3 + Math.random()),
+        bracoD: n1(36 + (7 - s) * 0.2 + Math.random() * 0.5),
+        bracoE: n1(35.5 + (7 - s) * 0.2 + Math.random() * 0.5),
+        cinturaUmbigo: n1(88 - (7 - s) * 0.4 + Math.random()),
+        quadril: n1(101 + Math.random()),
+        coxaD: n1(58 + Math.random()),
+        coxaE: n1(57.5 + Math.random()),
+        pctGordura: n1(18 - (7 - s) * 0.3 + Math.random() * 0.5),
+      };
+    }
+
+    const nomesExame = [
+      { nome: "AST (TGO)", unidade: "U/L", base: 28 }, { nome: "ALT (TGP)", unidade: "U/L", base: 25 },
+      { nome: "Creatinina", unidade: "mg/dL", base: 1.0 }, { nome: "Ureia", unidade: "mg/dL", base: 32 },
+      { nome: "Testosterona Total", unidade: "ng/dL", base: 650 }, { nome: "Estradiol", unidade: "pg/mL", base: 28 },
+      { nome: "TSH", unidade: "mUI/L", base: 2.1 }, { nome: "Glicose", unidade: "mg/dL", base: 88 },
+      { nome: "Colesterol Total", unidade: "mg/dL", base: 175 },
+    ];
+    let camposNovos = [...(data.examesCampos || [])];
+    const examesNovos = { ...(data.exames || {}) };
+    for (let s = 2; s >= 0; s--) {
+      const d = new Date(); d.setDate(d.getDate() - s * 30);
+      const key = iso(d);
+      const valores = {};
+      nomesExame.forEach((ex) => {
+        const { campos: c2, key: k2 } = acharOuCriarCampo(camposNovos, ex.nome, ex.unidade);
+        camposNovos = c2;
+        valores[k2] = n1(ex.base * (0.94 + Math.random() * 0.12));
+      });
+      examesNovos[key] = { ...(examesNovos[key] || {}), ...valores };
+    }
+
+    const angulos = ["frontal", "lateral", "costas"];
+    const fotosIndexNovo = { ...(data.fotosIndex || {}) };
+    for (let s = 2; s >= 0; s--) {
+      const d = new Date(); d.setDate(d.getDate() - s * 10);
+      const key = iso(d);
+      const cor = ["6B7FD7", "D77F6B", "7FD79A"][s];
+      for (const ang of angulos) {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420"><rect width="100%" height="100%" fill="#${cor}"/><text x="50%" y="48%" fill="#fff" font-family="sans-serif" font-size="20" text-anchor="middle">Foto de exemplo</text><text x="50%" y="56%" fill="#fff" font-family="sans-serif" font-size="14" text-anchor="middle">${ang} · ${key}</text></svg>`;
+        const dataUrl = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+        try { await window.storage.set(`foto:${key}:${ang}`, dataUrl); } catch { /* segue mesmo se falhar */ }
+      }
+      fotosIndexNovo[key] = angulos;
+    }
+
+    persist({ ...data, medicoes: medicoesNovas, examesCampos: camposNovos, exames: examesNovos, fotosIndex: fotosIndexNovo });
+    flash("Dados de exemplo adicionados — veja no Histórico");
+  }
 
   async function excluirConta() {
     const ok = window.confirm("Isso vai apagar TODOS os seus dados (refeições, medições, exames, fotos, tudo) de forma definitiva e sem volta. Sua conta de e-mail continua existindo, mas fica vazia. Tem certeza que quer continuar?");
@@ -3188,6 +3264,15 @@ function Perfil({ data, cfg, refModeloPadrao, persist }) {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="card" style={{ padding: 16, marginTop: 11 }}>
+        <div className="eb" style={{ margin: "0 0 10px", fontWeight: 700 }}>Seus dados</div>
+        <button className="ghost" style={{ width: "100%", padding: 12, marginBottom: 9 }} onClick={exportar}>Baixar tudo em CSV</button>
+        <button className="ghost" style={{ width: "100%", padding: 12, color: "var(--violet-d)", borderColor: "var(--violet-s)" }} onClick={gerarDadosExemplo}>
+          🧪 Carregar dados de exemplo
+        </button>
+        <div className="eb" style={{ marginTop: 8, lineHeight: 1.5 }}>Adiciona medições, exames e fotos fictícios, só pra você testar as telas do Histórico populadas.</div>
       </div>
 
       <button className="ghost" style={{ width: "100%", padding: 13, marginTop: 11, color: "var(--coral-d)", borderColor: "var(--coral-s)", fontWeight: 700 }}
@@ -3347,15 +3432,6 @@ function Ajustes({ data, cfg, persist, flash }) {
 
       <div style={{ marginBottom: 11 }}>
         <Marcadores lista={cfg.marcadores} valores={{}} onValor={() => {}} onLista={(l) => set({ marcadores: l })} />
-      </div>
-
-      <div className="card" style={{ padding: 16 }}>
-        <div className="eb" style={{ margin: "0 0 10px", fontWeight: 700 }}>Seus dados</div>
-        <button className="ghost" style={{ width: "100%", padding: 12, marginBottom: 9 }} onClick={exportar}>Baixar tudo em CSV</button>
-        <button className="ghost" style={{ width: "100%", padding: 12, color: "var(--violet-d)", borderColor: "var(--violet-s)" }} onClick={gerarDadosExemplo}>
-          🧪 Carregar dados de exemplo
-        </button>
-        <div className="eb" style={{ marginTop: 8, lineHeight: 1.5 }}>Adiciona medições, exames e fotos fictícios, só pra você testar as telas do Histórico populadas.</div>
       </div>
     </>
   );
