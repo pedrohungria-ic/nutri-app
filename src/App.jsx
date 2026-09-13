@@ -371,7 +371,7 @@ export default function Nutri() {
 
   useEffect(() => {
     (async () => {
-      const vazio = { config: CONFIG_PADRAO, favs: [], custom: [], recentes: [], days: {}, pesos: {}, medicoes: {}, altura: null, fotosIndex: {}, examesCampos: [], exames: {}, exameContexto: {}, medicamentoHistorico: {}, suplementoHistorico: {}, refeicoesFavoritas: [], tendenciasRazoes: [] };
+      const vazio = { config: CONFIG_PADRAO, favs: [], custom: [], recentes: [], days: {}, pesos: {}, sono: {}, medicoes: {}, altura: null, fotosIndex: {}, examesCampos: [], exames: {}, exameContexto: {}, medicamentoHistorico: {}, suplementoHistorico: {}, refeicoesFavoritas: [], tendenciasRazoes: [] };
       try {
         const r = await window.storage.get(KEY);
         const p = JSON.parse(r.value);
@@ -485,6 +485,7 @@ export default function Nutri() {
             <PainelTopo
               pesos={data.pesos || {}} day={day}
               onSetPeso={(kg) => persist({ ...data, pesos: { ...(data.pesos || {}), [day]: kg } })}
+              sono={data.sono || {}} onSetSono={(h) => persist({ ...data, sono: { ...(data.sono || {}), [day]: h } })}
               medLista={cfg.medicamentos} medMarcados={dia.medicamentos || []} medHistorico={data.medicamentoHistorico || {}}
               onToggleMed={(m) => {
                 const hist = (data.medicamentoHistorico || {})[m.id];
@@ -524,12 +525,12 @@ export default function Nutri() {
               onMarcLista={(l) => persist({ ...data, config: { ...cfg, marcadores: l } })}
             />
 
-            <LinhaMacros tot={tot} cfg={metaHoje} />
-
-            <CardAgua ml={dia.agua || 0} meta={refModeloPadrao.metaAgua || 2500}
-              onAlterar={(delta) => setDia({ agua: Math.max(0, (dia.agua || 0) + delta) })} />
+            <LinhaMacros tot={tot} cfg={metaHoje} agua={dia.agua || 0} metaAgua={refModeloPadrao.metaAgua || 2500} />
 
           <div style={{ height: 20, borderBottom: "1px solid var(--rule)", marginBottom: 20 }} />
+
+          <CardAgua ml={dia.agua || 0} meta={refModeloPadrao.metaAgua || 2500}
+            onAlterar={(delta) => setDia({ agua: Math.max(0, (dia.agua || 0) + delta) })} />
 
           {dia.meals.map((m) => (
             <MealCard
@@ -682,7 +683,7 @@ export default function Nutri() {
 }
 
 /* ---------- suplementos: fino, no topo, expansível, editável ---------- */
-function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico, onToggleMed, suppLista, suppMarcados, suppHistorico, onToggleSupp, marcLista, marcValores, onMarcValor, onMarcLista }) {
+function PainelTopo({ pesos, day, onSetPeso, sono, onSetSono, medLista, medMarcados, medHistorico, onToggleMed, suppLista, suppMarcados, suppHistorico, onToggleSupp, marcLista, marcValores, onMarcValor, onMarcLista }) {
   const [aberto, setAberto] = useState(null);
 
   const medHoje = medLista.filter((m) => itemDue((medHistorico || {})[m.id], day));
@@ -694,18 +695,19 @@ function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico
 
   const Mini = ({ k, icone, titulo, valor, cor }) => (
     <button onClick={() => setAberto(aberto === k ? null : k)}
-      style={{ flex: 1, background: aberto === k ? "var(--ink)" : "var(--card)", borderRadius: 12, padding: "9px 6px",
+      style={{ flex: 1, background: aberto === k ? "var(--ink)" : "var(--card)", borderRadius: 12, padding: "9px 4px",
         display: "flex", flexDirection: "column", alignItems: "center", gap: 2, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
-      <span style={{ fontSize: 15 }}>{icone}</span>
-      <span style={{ fontSize: 10, fontWeight: 700, color: aberto === k ? "#fff" : "var(--ink)" }}>{titulo}</span>
-      <span style={{ fontSize: 10.5, fontWeight: 800, color: aberto === k ? "#fff" : (cor || "var(--ink2)") }}>{valor}</span>
+      <span style={{ fontSize: 14 }}>{icone}</span>
+      <span style={{ fontSize: 9, fontWeight: 700, color: aberto === k ? "#fff" : "var(--ink)" }}>{titulo}</span>
+      <span style={{ fontSize: 9.5, fontWeight: 800, color: aberto === k ? "#fff" : (cor || "var(--ink2)") }}>{valor}</span>
     </button>
   );
 
   return (
     <div style={{ marginBottom: 10 }}>
-      <div style={{ display: "flex", gap: 7 }}>
+      <div style={{ display: "flex", gap: 6 }}>
         <Mini k="peso" icone="⚖️" titulo="Peso" valor={pesos[day] != null ? `${n1(pesos[day])}kg` : "—"} />
+        <Mini k="sono" icone="😴" titulo="Sono" valor={sono[day] != null ? `${n1(sono[day])}h` : "—"} />
         <Mini k="med" icone="💊" titulo="Meds" valor={`${medFeito}/${medHoje.length}`} cor={medFeito === medHoje.length && medHoje.length ? "var(--lime-d)" : "var(--ink2)"} />
         <Mini k="supp" icone="💪" titulo="Supl" valor={`${suppFeito}/${suppHoje.length}`} cor={suppFeito === suppHoje.length && suppHoje.length ? "var(--lime-d)" : "var(--ink2)"} />
         <Mini k="humor" icone="😊" titulo="Humor" valor={marcMedia != null ? `${marcMedia.toFixed(1)}/5` : "—"} cor={marcMedia != null ? "var(--violet-d)" : "var(--ink2)"} />
@@ -714,6 +716,7 @@ function PainelTopo({ pesos, day, onSetPeso, medLista, medMarcados, medHistorico
       {aberto && (
         <div className="card" style={{ padding: 13, marginTop: 8 }}>
           {aberto === "peso" && <PesoConteudo pesos={pesos} day={day} onSet={onSetPeso} />}
+          {aberto === "sono" && <SonoConteudo sono={sono} day={day} onSet={onSetSono} />}
           {aberto === "med" && <ListaConteudo lista={medLista} marcados={medMarcados} historico={medHistorico} day={day} onToggle={onToggleMed} />}
           {aberto === "supp" && <ListaConteudo lista={suppLista} marcados={suppMarcados} historico={suppHistorico} day={day} onToggle={onToggleSupp} />}
           {aberto === "humor" && <Marcadores lista={marcLista} valores={marcValores} onValor={onMarcValor} onLista={onMarcLista} embutido />}
@@ -766,6 +769,30 @@ function PesoConteudo({ pesos, day, onSet }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function SonoConteudo({ sono, day, onSet }) {
+  const [val, setVal] = useState(sono[day] != null ? String(sono[day]) : "");
+  useEffect(() => { setVal(sono[day] != null ? String(sono[day]) : ""); }, [day, sono]);
+
+  const entradas = Object.keys(sono).sort().reverse().slice(0, 10);
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 11 }}>
+        <input className="num" inputMode="decimal" placeholder="horas" value={val}
+          onChange={(e) => setVal(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))}
+          style={{ flex: 1, padding: "8px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" }} />
+        <button className="ghost" disabled={!val} onClick={() => onSet(Number(val))}>salvar</button>
+      </div>
+      {entradas.map((d, i) => (
+        <div key={d} className="row" style={{ padding: "6px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
+          <span style={{ fontSize: 12.5 }}>{label(d)}</span>
+          <span className="num" style={{ fontSize: 12.5, fontWeight: 700 }}>{n1(sono[d])} h</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1051,9 +1078,7 @@ function SecaoPeso({ pesos, dataInicio, dataFim }) {
   const chartData = datas.map((d) => ({ data: label(d).slice(0, 6), kg: pesos[d] }));
 
   return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>⚖️ Evolução de peso</div>
-
+    <div style={{ marginBottom: 4 }}>
       {chartData.length >= 2 && (
         <div className="card" style={{ padding: 14, marginBottom: 10 }}>
           <div style={{ width: "100%", height: 130 }}>
@@ -1189,26 +1214,32 @@ function Pills({ m, metas }) {
 
 /* ---------- resumo do dia ---------- */
 /* ---------- linha de macros do dia ---------- */
-function LinhaMacros({ tot, cfg }) {
+function LinhaMacros({ tot, cfg, agua, metaAgua }) {
   const [aberto, setAberto] = useState(false);
   const over = tot.kcal > cfg.kcal;
   const pctKcal = Math.min(100, (tot.kcal / (cfg.kcal || 1)) * 100);
 
   const Mini = ({ icone, titulo, valor, meta, cor }) => (
     <button onClick={() => setAberto(!aberto)}
-      style={{ flex: 1, background: "var(--card)", borderRadius: 12, padding: "9px 6px",
+      style={{ flex: 1, background: "var(--card)", borderRadius: 12, padding: "9px 4px",
         display: "flex", flexDirection: "column", alignItems: "center", gap: 2, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
-      <span style={{ fontSize: 15 }}>{icone}</span>
-      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--ink)" }}>{titulo}</span>
-      <span className="num" style={{ fontSize: 10.5, fontWeight: 800, color: cor || "var(--ink2)" }}>{fmt(valor)}/{fmt(meta)}</span>
+      <span style={{ fontSize: 14 }}>{icone}</span>
+      <span style={{ fontSize: 9, fontWeight: 700, color: "var(--ink)" }}>{titulo}</span>
+      <span className="num" style={{ fontSize: 9.5, fontWeight: 800, color: cor || "var(--ink2)" }}>{fmt(valor)}/{fmt(meta)}</span>
     </button>
   );
 
   return (
     <div style={{ marginBottom: 10 }}>
-      <div style={{ display: "flex", gap: 7 }}>
+      <div style={{ display: "flex", gap: 6 }}>
         <Mini icone="🔥" titulo="Kcal" valor={tot.kcal} meta={cfg.kcal} cor={over ? "var(--coral-d)" : "var(--ink)"} />
         {MACROS.map((x) => <Mini key={x.k} icone={x.icone} titulo={x.nome} valor={tot[x.k]} meta={cfg[x.k]} cor={x.txt} />)}
+        <div style={{ flex: 1, background: "var(--blue-s)", borderRadius: 12, padding: "9px 4px",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+          <span style={{ fontSize: 14 }}>💧</span>
+          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--blue-d)" }}>Água</span>
+          <span className="num" style={{ fontSize: 9.5, fontWeight: 800, color: "var(--blue-d)" }}>{((agua || 0) / 1000).toFixed(1)}/{((metaAgua || 2500) / 1000).toFixed(1)}L</span>
+        </div>
       </div>
 
       {aberto && (
@@ -1250,15 +1281,20 @@ function LinhaMacros({ tot, cfg }) {
 function CardAgua({ ml, meta, onAlterar }) {
   const pct = Math.min(100, (ml / (meta || 1)) * 100);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-      <div style={{ position: "relative", height: 38, flex: 1, background: "var(--blue-s)", borderRadius: 10, overflow: "hidden" }}>
-        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: "var(--blue)" }} />
-        <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", padding: "0 12px", fontSize: 13, fontWeight: 700, color: "var(--blue-d)" }}>
-          💧 Água · {(ml / 1000).toFixed(2)}/{(meta / 1000).toFixed(2)}L
+    <div className="card" style={{ padding: "13px 15px", marginBottom: 9 }}>
+      <div className="row" style={{ marginBottom: 9 }}>
+        <span style={{ fontSize: 14.5, fontWeight: 700 }}>Água</span>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="mini" style={{ fontSize: 16, padding: "3px 9px" }} onClick={() => onAlterar(-50)} aria-label="Menos 50ml">−</button>
+          <button className="mini" style={{ fontSize: 16, padding: "3px 9px" }} onClick={() => onAlterar(50)} aria-label="Mais 50ml">+</button>
         </div>
       </div>
-      <button className="mini" style={{ fontSize: 18, padding: "4px 10px" }} onClick={() => onAlterar(-50)} aria-label="Menos 50ml">−</button>
-      <button className="mini" style={{ fontSize: 18, padding: "4px 10px" }} onClick={() => onAlterar(50)} aria-label="Mais 50ml">+</button>
+      <div style={{ position: "relative", height: 24, background: "var(--blue-s)", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: "var(--blue)" }} />
+        <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", padding: "0 9px", fontSize: 11, fontWeight: 700, color: "var(--blue-d)" }}>
+          Água · {(ml / 1000).toFixed(2)}/{(meta / 1000).toFixed(2)}L
+        </div>
+      </div>
     </div>
   );
 }
@@ -1882,12 +1918,13 @@ function FoodSheet({ data, meal, meals, onClose, onAdd, onFav, onCustom }) {
 
       {!meal && meals && meals.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <div className="eb" style={{ marginBottom: 7, fontWeight: 700 }}>Em qual dieta?</div>
+          <div className="eb" style={{ marginBottom: 7, fontWeight: 700 }}>Em qual refeição?</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {meals.map((m) => (
               <button key={m.id} className="chip" data-on={mealAlvoId === m.id ? "1" : "0"} onClick={() => setMealAlvoId(m.id)}>{m.nome}</button>
             ))}
           </div>
+          <div style={{ height: 1, background: "var(--rule)", margin: "14px 0 0" }} />
         </div>
       )}
 
@@ -1920,7 +1957,7 @@ function FoodSheet({ data, meal, meals, onClose, onAdd, onFav, onCustom }) {
             <Pills m={preview} />
           </div>
           {precisaEscolherRefeicao ? (
-            <div className="eb" style={{ textAlign: "center", padding: "8px 0", color: "var(--coral-d)" }}>Escolha a dieta acima para adicionar</div>
+            <div className="eb" style={{ textAlign: "center", padding: "8px 0", color: "var(--coral-d)" }}>Escolha a refeição acima para adicionar</div>
           ) : (
             <button className="cta" onClick={() => onAdd([{ ...sel, id: uid(), g: Number(g) || 0 }], mealAlvoId || (meal && meal.id))}>
               Adicionar em {mealAlvo ? mealAlvo.nome : ""}
@@ -2032,6 +2069,27 @@ const SERIES_TENDENCIA = [
   { key: "pctMeta", nome: "% da meta (kcal)", unidade: "%", cor: "var(--violet-d)" },
 ];
 
+function SeletorPeriodo({ preset, aplicarPreset, setPreset, dataInicio, setDataInicio, dataFim, setDataFim }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+        {[["hoje", "Hoje"], ["7d", "7d"], ["14d", "14d"], ["30d", "30d"]].map(([p, lb]) => (
+          <button key={p} className="chip" data-on={preset === p ? "1" : "0"} onClick={() => aplicarPreset(p)} style={{ padding: "6px 11px" }}>{lb}</button>
+        ))}
+        <button className="chip" data-on={preset === "personalizado" ? "1" : "0"} onClick={() => setPreset("personalizado")} style={{ padding: "6px 11px" }}>personalizado</button>
+      </div>
+      {preset === "personalizado" && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span className="eb">de</span>
+          <input type="date" value={dataInicio} max={dataFim} onChange={(e) => setDataInicio(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+          <span className="eb">até</span>
+          <input type="date" value={dataFim} min={dataInicio} onChange={(e) => setDataFim(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FaixaHistorico({ icone, titulo, contagem, aberto, onToggle, children }) {
   return (
     <div className="strip" style={{ marginBottom: 11 }}>
@@ -2119,26 +2177,13 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
 
       <FaixaHistorico icone="⚖️" titulo="Evolução de peso" contagem={Object.keys(data.pesos || {}).filter((d) => d >= dataInicio && d <= dataFim).length}
         aberto={abertoPeso} onToggle={() => setAbertoPeso(!abertoPeso)}>
+        <SeletorPeriodo preset={preset} aplicarPreset={aplicarPreset} setPreset={setPreset} dataInicio={dataInicio} setDataInicio={setDataInicio} dataFim={dataFim} setDataFim={setDataFim} />
         <SecaoPeso pesos={data.pesos || {}} dataInicio={dataInicio} dataFim={dataFim} />
-
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
-          {[["hoje", "Hoje"], ["7d", "7d"], ["14d", "14d"], ["30d", "30d"]].map(([p, lb]) => (
-            <button key={p} className="chip" data-on={preset === p ? "1" : "0"} onClick={() => aplicarPreset(p)} style={{ padding: "6px 11px" }}>{lb}</button>
-          ))}
-          <button className="chip" data-on={preset === "personalizado" ? "1" : "0"} onClick={() => setPreset("personalizado")} style={{ padding: "6px 11px" }}>personalizado</button>
-        </div>
-        {preset === "personalizado" && (
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <span className="eb">de</span>
-            <input type="date" value={dataInicio} max={dataFim} onChange={(e) => setDataInicio(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
-            <span className="eb">até</span>
-            <input type="date" value={dataFim} min={dataInicio} onChange={(e) => setDataFim(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
-          </div>
-        )}
       </FaixaHistorico>
 
       <FaixaHistorico icone="🍽️" titulo="Evolução de alimentação" contagem={reg.length}
         aberto={abertoAlim} onToggle={() => setAbertoAlim(!abertoAlim)}>
+        <SeletorPeriodo preset={preset} aplicarPreset={aplicarPreset} setPreset={setPreset} dataInicio={dataInicio} setDataInicio={setDataInicio} dataFim={dataFim} setDataFim={setDataFim} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginBottom: 10 }}>
           {cards.map((c) => (
             <div key={c.lb} className="card" style={{ padding: 14, background: c.bg }}>
@@ -2477,7 +2522,6 @@ function RazoesCard({ seriesMedidas, seriesExames, seriesMarcadores, seriesMedic
 }
 
 function MedicoesPanel({ medicoes, altura, onAltura, onSalvar }) {
-  const [open, setOpen] = useState(false);
   const [modo, setModo] = useState("lista");
   const [dataForm, setDataForm] = useState(iso(new Date()));
   const [vals, setVals] = useState({});
@@ -2510,48 +2554,41 @@ function MedicoesPanel({ medicoes, altura, onAltura, onSalvar }) {
   }
 
   return (
-    <div className="strip">
-      <button className="stripBtn" onClick={() => setOpen(!open)}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: 14 }}>📏</span>
-          <span style={{ fontSize: 13.5, fontWeight: 600 }}>Medições</span>
-          <span className="pill" style={{ background: ultima ? "var(--lime-s)" : "var(--rule)", color: ultima ? "var(--lime-d)" : "var(--ink2)" }}>
-            {ultima ? `última ${label(ultima)}` : "sem registro"}
-          </span>
-        </div>
-        <span style={{ color: "var(--ink3)", fontSize: 12 }}>{open ? "▲" : "▼"}</span>
-      </button>
+    <div>
+      <div className="row" style={{ marginBottom: 10 }}>
+        <span className="eb" style={{ fontWeight: 700 }}>Registros de medição</span>
+        <button className="mini" style={{ color: "var(--coral-d)" }} onClick={() => (modo === "form" ? setModo("lista") : nova())}>
+          {modo === "form" ? "cancelar" : "+ Nova medição"}
+        </button>
+      </div>
 
-      {open && (
-        <div style={{ marginTop: 10 }}>
-          {modo === "lista" && (
-            <>
-              <button className="cta" style={{ marginBottom: 10 }} onClick={nova}>+ nova medição</button>
-              {datas.length === 0 && <div className="eb" style={{ padding: "6px 0" }}>Nenhuma medição ainda. Você costuma medir aos domingos.</div>}
-              {datas.map((d, i) => (
-                <button key={d} onClick={() => carregar(d)} style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", padding: "8px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
-                  <div className="row">
-                    <span style={{ fontSize: 12.5 }}>{label(d)}</span>
-                    <span className="num" style={{ fontSize: 12, color: "var(--ink2)" }}>
-                      {medicoes[d].pctGordura != null ? `${n1(medicoes[d].pctGordura)}% gordura` : `${Object.keys(medicoes[d]).length} campos`}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </>
-          )}
-
-          {modo === "form" && (
-            <>
-              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10 }}>
-                <input type="date" value={dataForm} onChange={(e) => setDataForm(e.target.value)} style={{ flex: 1, padding: "8px 10px", fontSize: 13 }} />
-                <input className="num" inputMode="numeric" placeholder="altura cm" value={alturaForm}
-                  onChange={(e) => setAlturaForm(e.target.value.replace(/\D/g, ""))} style={{ width: 96, padding: "8px 10px", fontSize: 13, textAlign: "center" }} />
+      {modo === "lista" && (
+        <>
+          {datas.length === 0 && <div className="eb" style={{ padding: "6px 0" }}>Nenhuma medição ainda. Você costuma medir aos domingos.</div>}
+          {datas.map((d, i) => (
+            <button key={d} onClick={() => carregar(d)} style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", padding: "8px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
+              <div className="row">
+                <span style={{ fontSize: 12.5 }}>{label(d)}</span>
+                <span className="num" style={{ fontSize: 12, color: "var(--ink2)" }}>
+                  {medicoes[d].pctGordura != null ? `${n1(medicoes[d].pctGordura)}% gordura` : `${Object.keys(medicoes[d]).length} campos`}
+                </span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 12 }}>
-                {camposManuais.map((c) => (
-                  <label key={c.key}>
-                    <div className="eb" style={{ marginBottom: 3 }}>{c.lb}</div>
+            </button>
+          ))}
+        </>
+      )}
+
+      {modo === "form" && (
+        <>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10 }}>
+            <input type="date" value={dataForm} onChange={(e) => setDataForm(e.target.value)} style={{ flex: 1, padding: "8px 10px", fontSize: 13 }} />
+            <input className="num" inputMode="numeric" placeholder="altura cm" value={alturaForm}
+              onChange={(e) => setAlturaForm(e.target.value.replace(/\D/g, ""))} style={{ width: 96, padding: "8px 10px", fontSize: 13, textAlign: "center" }} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 12 }}>
+            {camposManuais.map((c) => (
+              <label key={c.key}>
+                <div className="eb" style={{ marginBottom: 3 }}>{c.lb}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <input className="num" inputMode="decimal" style={{ padding: "7px 8px", fontSize: 12.5 }}
                         value={vals[c.key] || ""} onChange={(e) => setVals({ ...vals, [c.key]: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
@@ -2574,8 +2611,6 @@ function MedicoesPanel({ medicoes, altura, onAltura, onSalvar }) {
               </div>
             </>
           )}
-        </div>
-      )}
     </div>
   );
 }
@@ -2638,7 +2673,7 @@ function comprimir(file) {
 }
 
 function FotosPanel({ fotosIndex, onIndex }) {
-  const [open, setOpen] = useState(false);
+  const [formAberto, setFormAberto] = useState(false);
   const [dataForm, setDataForm] = useState(iso(new Date()));
   const [guia, setGuia] = useState(null);
   const [preview, setPreview] = useState({});
@@ -2663,20 +2698,16 @@ function FotosPanel({ fotosIndex, onIndex }) {
   }
 
   return (
-    <div className="strip">
-      <button className="stripBtn" onClick={() => setOpen(!open)}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: 14 }}>📷</span>
-          <span style={{ fontSize: 13.5, fontWeight: 600 }}>Fotos de progresso</span>
-          <span className="pill" style={{ background: datas.length ? "var(--lime-s)" : "var(--rule)", color: datas.length ? "var(--lime-d)" : "var(--ink2)" }}>
-            {datas.length ? `última ${label(datas[0])}` : "sem registro"}
-          </span>
-        </div>
-        <span style={{ color: "var(--ink3)", fontSize: 12 }}>{open ? "▲" : "▼"}</span>
-      </button>
+    <div>
+      <div className="row" style={{ marginBottom: 10 }}>
+        <span className="eb" style={{ fontWeight: 700 }}>Registros de fotos</span>
+        <button className="mini" style={{ color: "var(--coral-d)" }} onClick={() => setFormAberto(!formAberto)}>
+          {formAberto ? "cancelar" : "+ Novas fotografias"}
+        </button>
+      </div>
 
-      {open && (
-        <div style={{ marginTop: 10 }}>
+      {formAberto && (
+        <>
           <input type="date" value={dataForm} onChange={(e) => { setDataForm(e.target.value); setPreview({}); }}
             style={{ padding: "8px 10px", fontSize: 13, marginBottom: 10 }} />
 
@@ -2694,18 +2725,19 @@ function FotosPanel({ fotosIndex, onIndex }) {
               );
             })}
           </div>
+        </>
+      )}
 
-          {datas.length > 0 && (
-            <>
-              <div className="eb" style={{ margin: "12px 0 6px", fontWeight: 700 }}>Registros anteriores</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {datas.map((d) => (
-                  <button key={d} className="chip" onClick={() => setVerData(d)}>{label(d)} · {(fotosIndex[d] || []).length}</button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+      {datas.length === 0 && !formAberto && <div className="eb" style={{ padding: "6px 0" }}>Nenhuma foto ainda.</div>}
+      {datas.length > 0 && (
+        <>
+          <div className="eb" style={{ margin: "4px 0 6px", fontWeight: 700 }}>Registros anteriores</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {datas.map((d) => (
+              <button key={d} className="chip" onClick={() => setVerData(d)}>{label(d)} · {(fotosIndex[d] || []).length}</button>
+            ))}
+          </div>
+        </>
       )}
 
       {guia && (
@@ -2791,7 +2823,7 @@ function acharOuCriarCampo(campos, nome, unidade) {
 }
 
 function ExamesPanel({ campos, exames, contextos, onCampos, onSalvar, onContexto }) {
-  const [open, setOpen] = useState(false);
+  const [formAberto, setFormAberto] = useState(false);
   const [modo, setModo] = useState("lista");
   const [dataForm, setDataForm] = useState(iso(new Date()));
   const [proc, setProc] = useState(false);
@@ -2867,106 +2899,105 @@ Responda APENAS com um JSON compacto, sem markdown, sem espaços supérfluos, ne
       valores[key] = Number(r.valor);
     });
     onSalvar(dataForm, valores, camposAtual);
-    setRevisao(null); setModo("lista");
+    setRevisao(null); setModo("lista"); setFormAberto(false);
   }
 
   function adicionarManual() {
     if (!manNome.trim() || manValor === "") return;
     const { campos: c2, key } = acharOuCriarCampo(campos, manNome.trim(), manUnidade);
     onSalvar(dataForm, { [key]: Number(manValor) }, c2);
-    setManNome(""); setManValor(""); setManUnidade("");
+    setManNome(""); setManValor(""); setManUnidade(""); setModo("lista"); setFormAberto(false);
   }
 
   return (
-    <div className="strip">
-      <button className="stripBtn" onClick={() => setOpen(!open)}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: 14 }}>🧪</span>
-          <span style={{ fontSize: 13.5, fontWeight: 600 }}>Exames de sangue</span>
-          <span className="pill" style={{ background: datas.length ? "var(--lime-s)" : "var(--rule)", color: datas.length ? "var(--lime-d)" : "var(--ink2)" }}>
-            {datas.length ? `último ${label(datas[0])}` : "sem registro"}
-          </span>
-        </div>
-        <span style={{ color: "var(--ink3)", fontSize: 12 }}>{open ? "▲" : "▼"}</span>
-      </button>
+    <div>
+      <div className="row" style={{ marginBottom: 10 }}>
+        <span className="eb" style={{ fontWeight: 700 }}>Registros de exame</span>
+        <button className="mini" style={{ color: "var(--coral-d)" }} onClick={() => { setFormAberto(!formAberto); setModo("lista"); }}>
+          {formAberto ? "cancelar" : "+ Novo exame"}
+        </button>
+      </div>
 
-      {open && (
-        <div style={{ marginTop: 10 }}>
-          {modo === "lista" && (
-            <>
-              <input type="date" value={dataForm} onChange={(e) => setDataForm(e.target.value)} style={{ padding: "8px 10px", fontSize: 13, marginBottom: 10 }} />
+      {formAberto && modo === "lista" && (
+        <>
+          <input type="date" value={dataForm} onChange={(e) => setDataForm(e.target.value)} style={{ padding: "8px 10px", fontSize: 13, marginBottom: 10 }} />
 
-              <div className="card" style={{ padding: 13, marginBottom: 12, background: "var(--violet-s)" }}>
-                <div className="eb" style={{ color: "var(--violet-d)", fontWeight: 700, marginBottom: 9 }}>Contexto hormonal desta coleta</div>
+          <div className="card" style={{ padding: 13, marginBottom: 12, background: "var(--violet-s)" }}>
+            <div className="eb" style={{ color: "var(--violet-d)", fontWeight: 700, marginBottom: 9 }}>Contexto hormonal desta coleta</div>
 
-                <div className="eb" style={{ marginBottom: 5 }}>Testosterona — momento da coleta</div>
-                <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
-                  {[["pico", "Pico"], ["vale", "Vale"]].map(([k, lb]) => (
-                    <button key={k} className="chip" data-on={ctx.momento === k ? "1" : "0"}
-                      onClick={() => salvarCtx({ momento: ctx.momento === k ? "" : k })} style={{ flex: 1 }}>{lb}</button>
-                  ))}
-                </div>
-                <div className="eb" style={{ marginBottom: 4 }}>Dose de testosterona (mg)</div>
-                <input className="num" inputMode="decimal" placeholder="ex.: 125" value={ctx.dose}
-                  onChange={(e) => salvarCtx({ dose: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })}
-                  style={{ marginBottom: 12, background: "#fff" }} />
-
-                <div className="eb" style={{ marginBottom: 5 }}>Anastrozol — a cada quantos dias</div>
-                <div style={{ display: "flex", gap: 6, marginBottom: 9, flexWrap: "wrap" }}>
-                  {[5, 7, 10].map((n) => (
-                    <button key={n} className="chip" data-on={ctx.anaPeriodicidade === String(n) ? "1" : "0"}
-                      onClick={() => salvarCtx({ anaPeriodicidade: ctx.anaPeriodicidade === String(n) ? "" : String(n) })}>{n} dias</button>
-                  ))}
-                  <input className="num" inputMode="numeric" placeholder="outro" value={["5", "7", "10"].includes(ctx.anaPeriodicidade) ? "" : ctx.anaPeriodicidade}
-                    onChange={(e) => salvarCtx({ anaPeriodicidade: e.target.value.replace(/\D/g, "") })}
-                    style={{ width: 72, background: "#fff", fontSize: 12.5 }} />
-                </div>
-                <div className="eb" style={{ marginBottom: 4 }}>Última dose de anastrozol</div>
-                <input type="date" value={ctx.anaUltima} onChange={(e) => salvarCtx({ anaUltima: e.target.value })} style={{ background: "#fff" }} />
-              </div>
-
-              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                <label className="cta" style={{ flex: 1, display: "block", textAlign: "center", opacity: proc ? .6 : 1 }}>
-                  {proc ? "lendo…" : "Anexar PDF"}
-                  <input type="file" accept="application/pdf" style={{ display: "none" }}
-                    onChange={(e) => e.target.files && e.target.files[0] && processarArquivo(e.target.files[0])} />
-                </label>
-                <label className="cta" style={{ flex: 1, display: "block", textAlign: "center", opacity: proc ? .6 : 1 }}>
-                  {proc ? "lendo…" : "Fotografar exame"}
-                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
-                    onChange={(e) => e.target.files && e.target.files[0] && processarArquivo(e.target.files[0])} />
-                </label>
-              </div>
-              <div className="eb" style={{ marginBottom: 10, lineHeight: 1.5 }}>Se o botão não abrir nada ao tocar, o navegador pode estar bloqueando a seleção de arquivo neste ambiente — nesse caso, use "+ adicionar índice manualmente" abaixo.</div>
-              <button className="ghost" style={{ width: "100%", marginBottom: 10 }} onClick={() => setModo("manual")}>+ adicionar índice manualmente</button>
-              {erro && <div className="card" style={{ padding: 11, marginBottom: 10, fontSize: 12, color: "var(--coral-d)", background: "var(--coral-s)" }}>{erro}</div>}
-              {datas.length === 0 && <div className="eb" style={{ padding: "6px 0" }}>Nenhum exame ainda. Todo índice novo que aparecer é adicionado sozinho ao catálogo.</div>}
-              {datas.map((d, i) => (
-                <button key={d} onClick={() => setVerData(d)} style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", padding: "8px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
-                  <div className="row">
-                    <span style={{ fontSize: 12.5 }}>{label(d)}</span>
-                    <span className="num" style={{ fontSize: 12, color: "var(--ink2)" }}>{Object.keys(exames[d]).length} índices</span>
-                  </div>
-                </button>
+            <div className="eb" style={{ marginBottom: 5 }}>Testosterona — momento da coleta</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
+              {[["pico", "Pico"], ["vale", "Vale"]].map(([k, lb]) => (
+                <button key={k} className="chip" data-on={ctx.momento === k ? "1" : "0"}
+                  onClick={() => salvarCtx({ momento: ctx.momento === k ? "" : k })} style={{ flex: 1 }}>{lb}</button>
               ))}
-            </>
-          )}
-
-          {modo === "manual" && (
-            <div className="card" style={{ padding: 13 }}>
-              <div className="eb" style={{ marginBottom: 9, fontWeight: 700 }}>Novo índice — {label(dataForm)}</div>
-              <input placeholder="Nome do exame" value={manNome} onChange={(e) => setManNome(e.target.value)} style={{ marginBottom: 8, fontSize: 14 }} />
-              <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-                <input className="num" inputMode="decimal" placeholder="valor" value={manValor}
-                  onChange={(e) => setManValor(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))} style={{ flex: 1 }} />
-                <input placeholder="unidade" value={manUnidade} onChange={(e) => setManUnidade(e.target.value)} style={{ width: 90 }} />
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button className="cta" onClick={adicionarManual} disabled={!manNome.trim() || manValor === ""}>Salvar</button>
-                <button className="ghost" onClick={() => setModo("lista")}>concluir</button>
-              </div>
             </div>
-          )}
+            <div className="eb" style={{ marginBottom: 4 }}>Dose de testosterona (mg)</div>
+            <input className="num" inputMode="decimal" placeholder="ex.: 125" value={ctx.dose}
+              onChange={(e) => salvarCtx({ dose: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })}
+              style={{ marginBottom: 12, background: "#fff" }} />
+
+            <div className="eb" style={{ marginBottom: 5 }}>Anastrozol — a cada quantos dias</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 9, flexWrap: "wrap" }}>
+              {[5, 7, 10].map((n) => (
+                <button key={n} className="chip" data-on={ctx.anaPeriodicidade === String(n) ? "1" : "0"}
+                  onClick={() => salvarCtx({ anaPeriodicidade: ctx.anaPeriodicidade === String(n) ? "" : String(n) })}>{n} dias</button>
+              ))}
+              <input className="num" inputMode="numeric" placeholder="outro" value={["5", "7", "10"].includes(ctx.anaPeriodicidade) ? "" : ctx.anaPeriodicidade}
+                onChange={(e) => salvarCtx({ anaPeriodicidade: e.target.value.replace(/\D/g, "") })}
+                style={{ width: 72, background: "#fff", fontSize: 12.5 }} />
+            </div>
+            <div className="eb" style={{ marginBottom: 4 }}>Última dose de anastrozol</div>
+            <input type="date" value={ctx.anaUltima} onChange={(e) => salvarCtx({ anaUltima: e.target.value })} style={{ background: "#fff" }} />
+          </div>
+
+          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+            <label className="cta" style={{ flex: 1, display: "block", textAlign: "center", opacity: proc ? .6 : 1 }}>
+              {proc ? "lendo…" : "Anexar PDF"}
+              <input type="file" accept="application/pdf" style={{ display: "none" }}
+                onChange={(e) => e.target.files && e.target.files[0] && processarArquivo(e.target.files[0])} />
+            </label>
+            <label className="cta" style={{ flex: 1, display: "block", textAlign: "center", opacity: proc ? .6 : 1 }}>
+              {proc ? "lendo…" : "Fotografar exame"}
+              <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                onChange={(e) => e.target.files && e.target.files[0] && processarArquivo(e.target.files[0])} />
+            </label>
+          </div>
+          <div className="eb" style={{ marginBottom: 10, lineHeight: 1.5 }}>Se o botão não abrir nada ao tocar, o navegador pode estar bloqueando a seleção de arquivo neste ambiente — nesse caso, use "+ adicionar índice manualmente" abaixo.</div>
+          <button className="ghost" style={{ width: "100%", marginBottom: 10 }} onClick={() => setModo("manual")}>+ adicionar índice manualmente</button>
+          {erro && <div className="card" style={{ padding: 11, marginBottom: 10, fontSize: 12, color: "var(--coral-d)", background: "var(--coral-s)" }}>{erro}</div>}
+        </>
+      )}
+
+      {modo === "lista" && (
+        <>
+          {datas.length === 0 && <div className="eb" style={{ padding: "6px 0" }}>Nenhum exame ainda. Todo índice novo que aparecer é adicionado sozinho ao catálogo.</div>}
+          {datas.map((d, i) => (
+            <button key={d} onClick={() => setVerData(d)} style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", padding: "8px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
+              <div className="row">
+                <span style={{ fontSize: 12.5 }}>{label(d)}</span>
+                <span className="num" style={{ fontSize: 12, color: "var(--ink2)" }}>{Object.keys(exames[d]).length} índices</span>
+              </div>
+            </button>
+          ))}
+        </>
+      )}
+
+      {modo === "manual" && (
+        <div className="card" style={{ padding: 13 }}>
+          <div className="eb" style={{ marginBottom: 9, fontWeight: 700 }}>Novo índice — {label(dataForm)}</div>
+          <input placeholder="Nome do exame" value={manNome} onChange={(e) => setManNome(e.target.value)} style={{ marginBottom: 8, fontSize: 14 }} />
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            <input className="num" inputMode="decimal" placeholder="valor" value={manValor}
+              onChange={(e) => setManValor(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))} style={{ flex: 1 }} />
+            <input placeholder="unidade" value={manUnidade} onChange={(e) => setManUnidade(e.target.value)} style={{ width: 90 }} />
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button className="cta" onClick={adicionarManual} disabled={!manNome.trim() || manValor === ""}>Salvar</button>
+            <button className="ghost" onClick={() => setModo("lista")}>concluir</button>
+          </div>
+        </div>
+      )}
 
           {modo === "revisar" && revisao && (
             <>
@@ -2990,8 +3021,6 @@ Responda APENAS com um JSON compacto, sem markdown, sem espaços supérfluos, ne
               </div>
             </>
           )}
-        </div>
-      )}
 
       {verData && (
         <div className="sheet">
@@ -3039,6 +3068,10 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
   const [confSenha, setConfSenha] = useState("");
   const [statusSenha, setStatusSenha] = useState("");
   const [senhaAberta, setSenhaAberta] = useState(false);
+  const [abertoMeta, setAbertoMeta] = useState(false);
+  const [abertoPesoP, setAbertoPesoP] = useState(false);
+  const [abertoFotosP, setAbertoFotosP] = useState(false);
+  const [abertoDados, setAbertoDados] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: d }) => setEmail(d?.user?.email || ""));
@@ -3165,7 +3198,10 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
 
   return (
     <>
-      <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 14 }}>Perfil</div>
+      <div className="row" style={{ marginBottom: 14 }}>
+        <span style={{ fontSize: 19, fontWeight: 800 }}>Perfil</span>
+        <button className="mini" style={{ color: "var(--coral-d)" }} onClick={() => supabase.auth.signOut()}>sair</button>
+      </div>
 
       <div className="card" style={{ padding: 18, marginBottom: 11 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -3216,74 +3252,107 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
         </div>
       )}
 
-      <div className="card" style={{ padding: 15, marginBottom: 11 }}>
-        <div className="eb" style={{ fontWeight: 700, marginBottom: 9 }}>Meta ativa</div>
-        <div style={{ fontSize: 14.5, fontWeight: 600, marginBottom: 8 }}>{refModeloPadrao.nome}</div>
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-          <span className="pill" style={{ background: "var(--rule)", color: "var(--ink)" }}>{fmt(metaTotal.kcal)} kcal</span>
-          <Pills m={metaTotal} />
-        </div>
-      </div>
-
-      <div className="eb" style={{ margin: "2px 0 11px", lineHeight: 1.5 }}>Notificações e outras configurações do app chegam em breve.</div>
-
-      <div className="card" style={{ padding: 15, marginBottom: 11 }}>
-        <div className="row" style={{ marginBottom: 9 }}>
-          <span className="eb" style={{ fontWeight: 700 }}>Evolução do peso</span>
-          <span className="num" style={{ fontSize: 12.5, color: "var(--ink2)" }}>{pesoDatas.length} registros</span>
-        </div>
-        {pesoChart.length < 2 ? (
-          <div className="eb" style={{ padding: "8px 0" }}>Registre o peso por alguns dias para ver o gráfico aqui.</div>
-        ) : (
-          <div style={{ width: "100%", height: 140 }}>
-            <ResponsiveContainer>
-              <LineChart data={pesoChart} margin={{ top: 4, right: 6, left: -22, bottom: 0 }}>
-                <CartesianGrid stroke="var(--rule)" vertical={false} />
-                <XAxis dataKey="data" tick={{ fontSize: 9.5, fill: "var(--ink2)" }} axisLine={{ stroke: "var(--rule)" }} tickLine={false} />
-                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 9.5, fill: "var(--ink2)" }} axisLine={false} tickLine={false} width={30} />
-                <Tooltip formatter={(v) => [`${n1(v)} kg`, "Peso"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Line type="monotone" dataKey="kg" stroke="var(--coral)" strokeWidth={2} dot={{ r: 2 }} connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
+      <div className="strip" style={{ marginBottom: 11 }}>
+        <button className="stripBtn" onClick={() => setAbertoMeta(!abertoMeta)}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14 }}>🎯</span>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>Minha meta</span>
           </div>
-        )}
-      </div>
-
-      <div className="card" style={{ padding: 15 }}>
-        <div className="row" style={{ marginBottom: 9 }}>
-          <span className="eb" style={{ fontWeight: 700 }}>Evolução das fotos</span>
-        </div>
-        {datasFotos.length === 0 ? (
-          <div className="eb" style={{ padding: "8px 0" }}>Registre fotos de progresso no Histórico para ver a evolução aqui.</div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7 }}>
-            {datasFotos.map((d) => (
-              <button key={d} onClick={() => setVerFotos(d)} style={{ background: "var(--bg)", borderRadius: 9, overflow: "hidden", aspectRatio: "1/1.3", padding: 0 }}>
-                {thumbs[d] ? <img src={thumbs[d]} alt={d} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="eb" style={{ padding: 8 }}>{label(d)}</div>}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="card" style={{ padding: 16, marginTop: 11 }}>
-        <div className="eb" style={{ margin: "0 0 10px", fontWeight: 700 }}>Seus dados</div>
-        <button className="ghost" style={{ width: "100%", padding: 12, marginBottom: 9 }} onClick={exportar}>Baixar tudo em CSV</button>
-        <button className="ghost" style={{ width: "100%", padding: 12, color: "var(--violet-d)", borderColor: "var(--violet-s)" }} onClick={gerarDadosExemplo}>
-          🧪 Carregar dados de exemplo
+          <span style={{ color: "var(--ink3)", fontSize: 12 }}>{abertoMeta ? "▲" : "▼"}</span>
         </button>
-        <div className="eb" style={{ marginTop: 8, lineHeight: 1.5 }}>Adiciona medições, exames e fotos fictícios, só pra você testar as telas do Histórico populadas.</div>
+        {abertoMeta && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 14.5, fontWeight: 600, marginBottom: 8 }}>{refModeloPadrao.nome}</div>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              <span className="pill" style={{ background: "var(--rule)", color: "var(--ink)" }}>{fmt(metaTotal.kcal)} kcal</span>
+              <Pills m={metaTotal} />
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="strip" style={{ marginBottom: 11 }}>
+        <button className="stripBtn" onClick={() => setAbertoPesoP(!abertoPesoP)}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14 }}>⚖️</span>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>Evolução de peso</span>
+            <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>{pesoDatas.length}</span>
+          </div>
+          <span style={{ color: "var(--ink3)", fontSize: 12 }}>{abertoPesoP ? "▲" : "▼"}</span>
+        </button>
+        {abertoPesoP && (
+          <div style={{ marginTop: 10 }}>
+            {pesoChart.length < 2 ? (
+              <div className="eb" style={{ padding: "8px 0" }}>Registre o peso por alguns dias para ver o gráfico aqui.</div>
+            ) : (
+              <div style={{ width: "100%", height: 140 }}>
+                <ResponsiveContainer>
+                  <LineChart data={pesoChart} margin={{ top: 4, right: 6, left: -22, bottom: 0 }}>
+                    <CartesianGrid stroke="var(--rule)" vertical={false} />
+                    <XAxis dataKey="data" tick={{ fontSize: 9.5, fill: "var(--ink2)" }} axisLine={{ stroke: "var(--rule)" }} tickLine={false} />
+                    <YAxis domain={["auto", "auto"]} tick={{ fontSize: 9.5, fill: "var(--ink2)" }} axisLine={false} tickLine={false} width={30} />
+                    <Tooltip formatter={(v) => [`${n1(v)} kg`, "Peso"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Line type="monotone" dataKey="kg" stroke="var(--coral)" strokeWidth={2} dot={{ r: 2 }} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      <button className="ghost" style={{ width: "100%", padding: 13, marginTop: 11, color: "var(--coral-d)", borderColor: "var(--coral-s)", fontWeight: 700 }}
-        onClick={() => supabase.auth.signOut()}>
-        Sair da conta
-      </button>
+      <div className="strip" style={{ marginBottom: 11 }}>
+        <button className="stripBtn" onClick={() => setAbertoFotosP(!abertoFotosP)}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14 }}>📸</span>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>Evolução de fotos</span>
+            <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)" }}>{datasFotos.length}</span>
+          </div>
+          <span style={{ color: "var(--ink3)", fontSize: 12 }}>{abertoFotosP ? "▲" : "▼"}</span>
+        </button>
+        {abertoFotosP && (
+          <div style={{ marginTop: 10 }}>
+            {datasFotos.length === 0 ? (
+              <div className="eb" style={{ padding: "8px 0" }}>Registre fotos de progresso no Histórico para ver a evolução aqui.</div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7 }}>
+                {datasFotos.map((d) => (
+                  <button key={d} onClick={() => setVerFotos(d)} style={{ background: "var(--bg)", borderRadius: 9, overflow: "hidden", aspectRatio: "1/1.3", padding: 0 }}>
+                    {thumbs[d] ? <img src={thumbs[d]} alt={d} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="eb" style={{ padding: 8 }}>{label(d)}</div>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
-      <button className="ghost" style={{ width: "100%", padding: 13, marginTop: 9, color: "#fff", background: "var(--coral-d)", borderColor: "var(--coral-d)", fontWeight: 700 }}
-        onClick={excluirConta}>
-        Excluir conta e todos os dados
-      </button>
+      <div className="strip">
+        <button className="stripBtn" onClick={() => setAbertoDados(!abertoDados)}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14 }}>💾</span>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>Meus dados</span>
+          </div>
+          <span style={{ color: "var(--ink3)", fontSize: 12 }}>{abertoDados ? "▲" : "▼"}</span>
+        </button>
+        {abertoDados && (
+          <div style={{ marginTop: 10 }}>
+            <button className="ghost" style={{ width: "100%", padding: 12, marginBottom: 9 }} onClick={exportar}>Baixar tudo em CSV</button>
+            <button className="ghost" style={{ width: "100%", padding: 12, marginBottom: 9, color: "var(--violet-d)", borderColor: "var(--violet-s)" }} onClick={gerarDadosExemplo}>
+              🧪 Carregar dados de exemplo
+            </button>
+            <div className="eb" style={{ marginBottom: 14, lineHeight: 1.5 }}>Adiciona medições, exames e fotos fictícios, só pra você testar as telas do Histórico populadas.</div>
+
+            <button className="ghost" style={{ width: "100%", padding: 13, marginBottom: 9, color: "var(--coral-d)", borderColor: "var(--coral-s)", fontWeight: 700 }}
+              onClick={() => supabase.auth.signOut()}>
+              Sair da conta
+            </button>
+            <button className="ghost" style={{ width: "100%", padding: 13, color: "#fff", background: "var(--coral-d)", borderColor: "var(--coral-d)", fontWeight: 700 }}
+              onClick={excluirConta}>
+              Excluir conta e todos os dados
+            </button>
+          </div>
+        )}
+      </div>
 
       {verFotos && (
         <VisualizarFotos data={verFotos} angulos={(data.fotosIndex || {})[verFotos] || []} onClose={() => setVerFotos(null)}
