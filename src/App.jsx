@@ -149,6 +149,17 @@ function itemDue(historico, day) {
   const d = diffDias(day, ativa.data);
   return d >= 0 && d % cadaDias === 0;
 }
+function migrarPerfilOnboarding(dados, meta) {
+  if (!meta || !meta.nome || dados.perfilConta) return dados;
+  const hoje = iso(new Date());
+  return {
+    ...dados,
+    perfilConta: { nome: meta.nome, nascimento: meta.nascimento || null, genero: meta.genero || null },
+    altura: dados.altura == null && meta.altura_cm ? meta.altura_cm : dados.altura,
+    pesos: meta.peso_kg && dados.pesos[hoje] == null ? { ...dados.pesos, [hoje]: meta.peso_kg } : dados.pesos,
+  };
+}
+
 function migrarDoseUnificada(dados) {
   let mudou = false;
   const medHist = { ...(dados.medicamentoHistorico || {}) };
@@ -351,7 +362,7 @@ const I_GEAR = "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.6 1.6 0 00.3 1.8l.1.1a
 const I_USER = "M12 12a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM4 21a8 8 0 0116 0";
 
 /* =============== APP =============== */
-export default function Nutri() {
+export default function Nutri({ metadadosConta }) {
   const [tab, setTab] = useState("dia");
   const [data, setData] = useState(null);
   const [day, setDay] = useState(iso(new Date()));
@@ -377,7 +388,7 @@ export default function Nutri() {
         const r = await window.storage.get(KEY);
         const p = JSON.parse(r.value);
         const carregado = p && p.config ? { ...vazio, ...p } : vazio;
-        const migrado = migrarDoseUnificada(carregado);
+        const migrado = migrarPerfilOnboarding(migrarDoseUnificada(carregado), metadadosConta);
         if (migrado !== carregado) window.storage.set(KEY, JSON.stringify(migrado)).catch(() => {});
         setData(migrado);
         return;
@@ -387,7 +398,7 @@ export default function Nutri() {
           const r = await window.storage.get(k);
           const p = JSON.parse(r.value);
           if (p && p.config) {
-            const migrado = migrarDoseUnificada({ ...vazio, ...p });
+            const migrado = migrarPerfilOnboarding(migrarDoseUnificada({ ...vazio, ...p }), metadadosConta);
             setData(migrado);
             window.storage.set(KEY, JSON.stringify(migrado)).catch(() => {});
             setToast("Dados anteriores importados");
@@ -396,7 +407,9 @@ export default function Nutri() {
           }
         } catch { /* segue */ }
       }
-      setData(vazio);
+      const primeiroAcesso = migrarPerfilOnboarding(vazio, metadadosConta);
+      if (primeiroAcesso !== vazio) window.storage.set(KEY, JSON.stringify(primeiroAcesso)).catch(() => {});
+      setData(primeiroAcesso);
     })();
   }, []);
 
@@ -3367,7 +3380,13 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
       fotosIndexNovo[key] = angulos;
     }
 
-    persist({ ...data, medicoes: medicoesNovas, examesCampos: camposNovos, exames: examesNovos, fotosIndex: fotosIndexNovo });
+    const hoje = iso(new Date());
+    const complementoPerfil = {};
+    if (!data.perfilConta) complementoPerfil.perfilConta = { nome: "João", nascimento: "1982-03-14", genero: "m" };
+    if (!data.altura) complementoPerfil.altura = 178;
+    const pesosComExemplo = data.pesos && data.pesos[hoje] != null ? data.pesos : { ...(data.pesos || {}), [hoje]: 82 };
+
+    persist({ ...data, ...complementoPerfil, pesos: pesosComExemplo, medicoes: medicoesNovas, examesCampos: camposNovos, exames: examesNovos, fotosIndex: fotosIndexNovo });
     flash("Dados de exemplo adicionados — veja no Histórico");
   }
 
