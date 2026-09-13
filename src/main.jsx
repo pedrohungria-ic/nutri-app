@@ -48,21 +48,7 @@ function Raiz() {
 
   instalarStorage();
 
-  return (
-    <div style={{ position: "relative" }}>
-      <button
-        onClick={() => supabase.auth.signOut()}
-        style={{
-          position: "fixed", top: 10, right: 10, zIndex: 999,
-          background: "rgba(27,37,89,.06)", border: 0, borderRadius: 999,
-          padding: "6px 12px", fontSize: 11, color: "#7C87A3", cursor: "pointer",
-        }}
-      >
-        sair
-      </button>
-      <App />
-    </div>
-  );
+  return <App metadadosConta={sessao.user.user_metadata || {}} />;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(
