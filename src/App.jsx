@@ -224,10 +224,92 @@ function somarAlvo(meals) {
     return { kcal: a.kcal + (al.kcal || 0), prot: a.prot + (al.prot || 0), carb: a.carb + (al.carb || 0), gord: a.gord + (al.gord || 0) };
   }, { kcal: 0, prot: 0, carb: 0, gord: 0 });
 }
-function pctGorduraMarinha(pescoco, cintura, altura) {
+function pctGorduraMarinha(pescoco, cintura, altura, quadril, sexo) {
   if (!pescoco || !cintura || !altura || cintura <= pescoco) return null;
+  if (sexo === "f" && quadril) {
+    const v = 495 / (1.29579 - 0.35004 * Math.log10(cintura + quadril - pescoco) + 0.22100 * Math.log10(altura)) - 450;
+    return v > 0 && v < 60 ? v : null;
+  }
   const v = 495 / (1.0324 - 0.19077 * Math.log10(cintura - pescoco) + 0.15456 * Math.log10(altura)) - 450;
   return v > 0 && v < 60 ? v : null;
+}
+
+function calcIMC(peso, alturaCm) { const m = alturaCm / 100; return peso / (m * m); }
+function classificarIMC(imc) {
+  if (imc < 18.5) return { t: "Abaixo do peso", bg: "var(--orange-s)", txt: "var(--orange-d)" };
+  if (imc < 25) return { t: "Peso adequado", bg: "var(--lime-s)", txt: "var(--lime-d)" };
+  if (imc < 30) return { t: "Levemente acima", bg: "var(--orange-s)", txt: "var(--orange-d)" };
+  return { t: "Acima do ideal", bg: "var(--coral-s)", txt: "var(--coral-d)" };
+}
+function calcTMB(peso, altura, idade, sexo, percGordura) {
+  if (percGordura && percGordura > 3 && percGordura < 60) {
+    const massaMagra = peso * (1 - percGordura / 100);
+    return 370 + 21.6 * massaMagra; // Katch-McArdle — melhor pra quem tem % de gordura conhecido
+  }
+  const base = 10 * peso + 6.25 * altura - 5 * idade;
+  if (sexo === "m") return base + 5;
+  if (sexo === "f") return base - 161;
+  return base - 78;
+}
+const FATORES_ATIVIDADE = {
+  sedentario: { f: 1.2, t: "Sedentário", d: "Trabalho sentado, pouco ou nenhum exercício" },
+  leve: { f: 1.375, t: "Leve", d: "Exercício leve 1–3x por semana" },
+  moderado: { f: 1.55, t: "Moderado", d: "Exercício moderado 3–5x por semana" },
+  ativo: { f: 1.725, t: "Ativo", d: "Exercício intenso 6–7x por semana" },
+  muito_ativo: { f: 1.9, t: "Muito ativo", d: "Exercício intenso + trabalho fisicamente exigente" },
+};
+function calcTDEE(tmb, atividade) { return tmb * (FATORES_ATIVIDADE[atividade] || FATORES_ATIVIDADE.sedentario).f; }
+function semanasRecomendadas(pesoAtual, pesoMeta) {
+  const dif = Math.abs(pesoAtual - pesoMeta);
+  const taxaSemanal = Math.max(0.35, pesoAtual * 0.005);
+  return Math.max(4, Math.round(dif / taxaSemanal));
+}
+function calcMetaCalorica(tdee, objetivo, pesoAtual, pesoMeta, semanas) {
+  if (objetivo === "manter") return Math.round(tdee);
+  const dif = Math.abs(pesoAtual - pesoMeta);
+  const kcalTotais = dif * 7700;
+  const deficitDiario = kcalTotais / (semanas * 7);
+  const sinal = objetivo === "perder" ? -1 : 1;
+  let alvo = tdee + sinal * deficitDiario;
+  const piso = pesoAtual * 22;
+  if (objetivo === "perder") alvo = Math.max(alvo, piso, 1200);
+  return Math.round(alvo);
+}
+function calcMacrosAuto(kcal, peso) {
+  const prot = Math.round(peso * 2);
+  const gordKcal = kcal * 0.25;
+  const gord = Math.round(gordKcal / 9);
+  const carbKcal = kcal - prot * 4 - gordKcal;
+  const carb = Math.round(Math.max(0, carbKcal) / 4);
+  return { kcal: Math.round(kcal), prot, carb, gord };
+}
+function gerarRefeicoesOnboarding(meta, n, horaAcordar, horaDormir) {
+  const nomesPorN = {
+    2: ["Almoço", "Jantar"],
+    3: ["Café da manhã", "Almoço", "Jantar"],
+    4: ["Café da manhã", "Almoço", "Lanche da tarde", "Jantar"],
+    5: ["Café da manhã", "Lanche da manhã", "Almoço", "Lanche da tarde", "Jantar"],
+    6: ["Café da manhã", "Lanche da manhã", "Almoço", "Lanche da tarde", "Jantar", "Ceia"],
+  };
+  const nomes = nomesPorN[n] || nomesPorN[4];
+  const [ha, ma] = horaAcordar.split(":").map(Number);
+  const [hd, md] = horaDormir.split(":").map(Number);
+  let inicio = ha * 60 + ma, fim = hd * 60 + md;
+  if (fim <= inicio) fim += 24 * 60;
+  const janela = fim - inicio;
+  const passo = janela / (n + 1);
+  const horarios = [];
+  for (let i = 1; i <= n; i++) {
+    let min = Math.round(inicio + passo * i) % (24 * 60);
+    horarios.push(String(Math.floor(min / 60)).padStart(2, "0") + ":" + String(min % 60).padStart(2, "0"));
+  }
+  return nomes.map((nome, i) => ({
+    id: uid(), nome, hora: horarios[i],
+    alvo: {
+      kcal: Math.round(meta.kcal / n), prot: Math.round(meta.prot / n),
+      carb: Math.round(meta.carb / n), gord: Math.round(meta.gord / n),
+    },
+  }));
 }
 
 const calc = (it) => ({
@@ -373,58 +455,404 @@ function maskTelefone(digitosBrutos) {
   return out;
 }
 
+function GeradorAvatarSVG(emoji, cor) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="100%" height="100%" fill="${cor}"/><text x="50%" y="54%" font-size="100" text-anchor="middle" dominant-baseline="middle">${emoji}</text></svg>`;
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
+
 function Onboarding({ metadadosConta, onSalvar }) {
   const nomeInicial = (metadadosConta && (metadadosConta.full_name || metadadosConta.name)) || "";
-  const [nome, setNome] = useState(nomeInicial);
-  const [nascimento, setNascimento] = useState("");
-  const [genero, setGenero] = useState("");
-  const [altura, setAltura] = useState("");
-  const [peso, setPeso] = useState("");
-  const [telDigitos, setTelDigitos] = useState("55");
+  const PASSOS = ["dados", "foto", "imc-objetivo", "atividade", "prazo", "config-dieta", "resultado"];
+  const [passo, setPasso] = useState(0);
+  const [d, setD] = useState({
+    nome: nomeInicial, peso: "", altura: "", nascimento: "", sexo: "m", telDigitos: "55",
+    fotoData: "", avatarEscolhido: "", fotoTemp: "", editandoFoto: false, zoomFoto: 1,
+    sobre: "", objetivo: "", pesoMeta: "",
+    modoComposicao: "perc", percGordura: "", medPescoco: "", medCintura: "", medQuadril: "",
+    atividade: "", qualidadeAlimentar: "",
+    prazoSemanas: 12,
+    numRefeicoes: 4, horaAcordar: "07:00", horaDormir: "23:00", habitos: "",
+    usarMacrosCustom: false, macroProt: "", macroCarb: "", macroGord: "",
+  });
+  const imgRef = useRef(null);
+  const set = (patch) => setD((prev) => ({ ...prev, ...patch }));
 
-  const podeSalvar = nome.trim() && nascimento && genero && altura && peso;
+  function idadeAtual() {
+    if (!d.nascimento) return 0;
+    const hoje = new Date(); const n = fromIso(d.nascimento);
+    let idade = hoje.getFullYear() - n.getFullYear();
+    if (hoje.getMonth() < n.getMonth() || (hoje.getMonth() === n.getMonth() && hoje.getDate() < n.getDate())) idade--;
+    return idade;
+  }
 
-  return (
-    <div style={{ padding: "34px 2px 40px", maxWidth: 400, margin: "0 auto" }}>
-      <div style={{ textAlign: "center", marginBottom: 22 }}>
-        <div style={{ margin: "0 auto 12px" }}><Logo size={56} /></div>
-        <div style={{ fontSize: 19, fontWeight: 800 }}>Só mais um passo</div>
-        <div className="eb" style={{ marginTop: 5, lineHeight: 1.5 }}>Completa seu perfil pra gente começar certo.</div>
-      </div>
+  function irPara(delta) {
+    let i = passo + delta;
+    const dir = delta >= 0 ? 1 : -1;
+    while (i >= 0 && i < PASSOS.length) {
+      if (PASSOS[i] === "prazo" && d.objetivo === "manter") { i += dir; continue; }
+      break;
+    }
+    setPasso(Math.max(0, Math.min(PASSOS.length - 1, i)));
+  }
 
-      <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Nome completo</div>
-      <input value={nome} onChange={(e) => setNome(e.target.value)} style={{ marginBottom: 12 }} />
+  function confirmarFoto() {
+    const img = imgRef.current;
+    if (!img) return;
+    const canvas = document.createElement("canvas");
+    const size = 400;
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const natW = img.naturalWidth, natH = img.naturalHeight;
+    const minDim = Math.min(natW, natH);
+    const cropSize = minDim / d.zoomFoto;
+    const sx = (natW - cropSize) / 2, sy = (natH - cropSize) / 2;
+    ctx.drawImage(img, sx, sy, cropSize, cropSize, 0, 0, size, size);
+    set({ fotoData: canvas.toDataURL("image/jpeg", 0.85), avatarEscolhido: "", editandoFoto: false });
+  }
 
-      <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Data de nascimento</div>
-      <input type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} style={{ marginBottom: 12 }} />
+  function finalizar() {
+    const idade = idadeAtual();
+    const tmb = calcTMB(Number(d.peso), Number(d.altura), idade, d.sexo, Number(d.percGordura));
+    const tdee = calcTDEE(tmb, d.atividade);
+    const semanas = d.objetivo === "manter" ? null : d.prazoSemanas;
+    const kcalAlvo = d.objetivo === "manter" ? tdee : calcMetaCalorica(tdee, d.objetivo, Number(d.peso), Number(d.pesoMeta), semanas);
+    const macros = d.usarMacrosCustom && d.macroProt && d.macroCarb && d.macroGord
+      ? { prot: Number(d.macroProt), carb: Number(d.macroCarb), gord: Number(d.macroGord),
+          kcal: Math.round(Number(d.macroProt) * 4 + Number(d.macroCarb) * 4 + Number(d.macroGord) * 9) }
+      : calcMacrosAuto(kcalAlvo, Number(d.peso));
+    const meals = gerarRefeicoesOnboarding(macros, d.numRefeicoes, d.horaAcordar, d.horaDormir);
 
-      <div className="eb" style={{ marginBottom: 6, fontWeight: 700 }}>Gênero</div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        {[["m", "Masculino"], ["f", "Feminino"], ["o", "Outro"]].map(([k, lb]) => (
-          <button key={k} className="chip" data-on={genero === k ? "1" : "0"} style={{ flex: 1 }} onClick={() => setGenero(k)}>{lb}</button>
+    let fotoFinal = d.fotoData;
+    if (!fotoFinal && d.avatarEscolhido) {
+      const cores = ["#F5385D", "#7B61FF", "#5FC36A", "#F5A623", "#3B9FE0"];
+      fotoFinal = GeradorAvatarSVG(d.avatarEscolhido, cores[Math.abs(d.avatarEscolhido.charCodeAt(0)) % cores.length]);
+    }
+
+    let medida = null;
+    if (d.modoComposicao === "medidas" && d.medPescoco && d.medCintura) {
+      medida = { pescoco: Number(d.medPescoco), cinturaUmbigo: Number(d.medCintura) };
+      if (d.sexo === "f" && d.medQuadril) medida.quadril = Number(d.medQuadril);
+      const pct = pctGorduraMarinha(Number(d.medPescoco), Number(d.medCintura), Number(d.altura), Number(d.medQuadril), d.sexo);
+      if (pct) medida.pctGordura = n1(pct);
+    }
+
+    onSalvar({
+      nome: d.nome, nascimento: d.nascimento, genero: d.sexo,
+      telefone: d.telDigitos.length > 2 ? maskTelefone(d.telDigitos) : "",
+      altura: d.altura, peso: d.peso,
+      fotoData: fotoFinal, medida,
+      dietaModelo: { id: uid(), nome: "Dieta Padrão", padrao: true, metaAgua: 2500, meals },
+    });
+  }
+
+  const imc = d.peso && d.altura ? calcIMC(Number(d.peso), Number(d.altura)) : null;
+  const clIMC = imc ? classificarIMC(imc) : null;
+
+  const wrap = (titulo, sub, conteudo, opts) => (
+    <div style={{ padding: "26px 2px 40px", maxWidth: 400, margin: "0 auto" }}>
+      <div style={{ display: "flex", gap: 5, marginBottom: 20 }}>
+        {PASSOS.map((_, i) => (
+          <div key={i} onClick={() => i < passo && setPasso(i)}
+            style={{ flex: 1, height: 5, borderRadius: 999, background: i <= passo ? "var(--coral)" : "var(--rule)", cursor: i < passo ? "pointer" : "default" }} />
         ))}
       </div>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Altura (cm)</div>
-          <input className="num" inputMode="numeric" placeholder="178" value={altura} onChange={(e) => setAltura(e.target.value.replace(/\D/g, ""))} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Peso atual (kg)</div>
-          <input className="num" inputMode="decimal" placeholder="82" value={peso} onChange={(e) => setPeso(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))} />
-        </div>
+      <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 5 }}>{titulo}</div>
+      {sub && <div className="eb" style={{ marginBottom: 18, lineHeight: 1.5 }}>{sub}</div>}
+      {conteudo}
+      <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+        {passo > 0 && <button className="ghost" style={{ width: 48, flex: "0 0 auto" }} onClick={() => irPara(-1)}>←</button>}
+        <button className="cta" style={{ flex: 1 }} disabled={opts?.disabled} onClick={opts?.onNext || (() => irPara(1))}>{opts?.label || "Continuar"}</button>
       </div>
-
-      <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Celular (opcional)</div>
-      <input inputMode="numeric" value={maskTelefone(telDigitos)} placeholder="+55 (11) 98765-4321"
-        onChange={(e) => setTelDigitos(e.target.value.replace(/\D/g, ""))} style={{ marginBottom: 18 }} />
-
-      <button className="cta" style={{ width: "100%" }} disabled={!podeSalvar} onClick={() => onSalvar({ nome, nascimento, genero, altura, peso, telefone: telDigitos.length > 2 ? maskTelefone(telDigitos) : "" })}>
-        Continuar
-      </button>
     </div>
   );
+
+  if (PASSOS[passo] === "dados") {
+    return wrap("Olá! 👋 Vamos te conhecer", "Só o essencial pra calcular seu ponto de partida.", (
+      <>
+        <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Como você quer ser chamado?</div>
+        <input value={d.nome} onChange={(e) => set({ nome: e.target.value })} style={{ marginBottom: 12 }} />
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Peso atual (kg)</div>
+            <input className="num" inputMode="decimal" placeholder="82" value={d.peso} onChange={(e) => set({ peso: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Altura (cm)</div>
+            <input className="num" inputMode="numeric" placeholder="178" value={d.altura} onChange={(e) => set({ altura: e.target.value.replace(/\D/g, "") })} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Data de nascimento</div>
+            <input type="date" value={d.nascimento} onChange={(e) => set({ nascimento: e.target.value })} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Sexo biológico</div>
+            <select value={d.sexo} onChange={(e) => set({ sexo: e.target.value })}>
+              <option value="m">Masculino</option>
+              <option value="f">Feminino</option>
+              <option value="o">Outro</option>
+            </select>
+          </div>
+        </div>
+      </>
+    ), { disabled: !(d.peso && d.altura && d.nascimento) });
+  }
+
+  if (PASSOS[passo] === "foto") {
+    const avatares = ["🦁", "🐯", "🦊", "🐼", "🐸", "🦉", "🐺", "🦄"];
+    return wrap(`${d.nome ? d.nome.split(" ")[0] + ", quer" : "Quer"} colocar uma foto?`, "Fica mais fácil reconhecer seu progresso depois. Se preferir, escolhe um avatar.", (
+      <>
+        <div style={{ textAlign: "center", marginBottom: 18 }}>
+          <label style={{ display: "inline-block", cursor: "pointer" }}>
+            <div style={{ width: 100, height: 100, borderRadius: 999, margin: "0 auto 8px", background: d.avatarEscolhido && !d.fotoData ? "var(--violet-s)" : "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: d.avatarEscolhido && !d.fotoData ? 44 : 12, color: "var(--ink3)", overflow: "hidden", border: "2px dashed var(--rule)" }}>
+              {d.fotoData ? <img src={d.fotoData} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (d.avatarEscolhido || "📷 enviar foto")}
+            </div>
+            <input type="file" accept="image/*" style={{ display: "none" }}
+              onChange={(e) => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => set({ fotoTemp: r.result, editandoFoto: true, zoomFoto: 1 }); r.readAsDataURL(f); }} />
+            <div className="eb" style={{ color: "var(--coral-d)", fontWeight: 700 }}>{d.fotoData ? "trocar / reposicionar" : "enviar uma foto"}</div>
+          </label>
+        </div>
+        <div className="eb" style={{ marginBottom: 8, fontWeight: 700 }}>Ou escolha um avatar</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+          {avatares.map((a) => (
+            <button key={a} className="chip" data-on={d.avatarEscolhido === a && !d.fotoData ? "1" : "0"}
+              style={{ flex: "0 1 44px", fontSize: 19, padding: "8px 0" }}
+              onClick={() => set({ avatarEscolhido: a, fotoData: "" })}>{a}</button>
+          ))}
+        </div>
+
+        {d.editandoFoto && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(27,37,89,.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 80, padding: 20 }}>
+            <div style={{ background: "#fff", borderRadius: 18, padding: 20, maxWidth: 340, width: "100%" }}>
+              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12, textAlign: "center" }}>Ajustar foto</div>
+              <div style={{ width: "100%", aspectRatio: "1", borderRadius: 14, overflow: "hidden", background: "#111", marginBottom: 14, position: "relative" }}>
+                <img ref={imgRef} src={d.fotoTemp} alt=""
+                  style={{ position: "absolute", left: "50%", top: "50%", transform: `translate(-50%,-50%) scale(${d.zoomFoto})`, transformOrigin: "center", maxWidth: "none", height: `${100 * d.zoomFoto}%` }} />
+              </div>
+              <div className="eb" style={{ marginBottom: 4 }}>Zoom</div>
+              <input type="range" min="1" max="2.5" step="0.05" value={d.zoomFoto} onChange={(e) => set({ zoomFoto: Number(e.target.value) })} style={{ marginBottom: 14 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="ghost" style={{ width: 48 }} onClick={() => set({ editandoFoto: false })}>✕</button>
+                <button className="cta" style={{ flex: 1 }} onClick={confirmarFoto}>Usar essa foto</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    ), { onNext: () => irPara(1) });
+  }
+
+  if (PASSOS[passo] === "imc-objetivo") {
+    const modoMedidas = d.modoComposicao === "medidas";
+    return wrap(`${d.nome ? d.nome.split(" ")[0] + ", seu" : "Seu"} ponto de partida`, "Calculado a partir do peso e altura que você informou.", (
+      <>
+        {imc && (
+          <div style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--bg)", borderRadius: 14, padding: 16, marginBottom: 18 }}>
+            <div>
+              <div className="num" style={{ fontSize: 28, fontWeight: 800 }}>{imc.toFixed(1)}</div>
+              <span className="pill" style={{ background: clIMC.bg, color: clIMC.txt }}>{clIMC.t}</span>
+            </div>
+            <div className="eb" style={{ lineHeight: 1.5 }}>Esse é o seu IMC — mas ele não diferencia gordura de músculo, então pode enganar se você tem bastante massa muscular.</div>
+          </div>
+        )}
+
+        <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>🎙 Fale um pouco sobre você (opcional)</div>
+        <textarea placeholder="ex.: sou bem musculoso, treino há anos, meu gasto calórico costuma ser mais alto do que a conta padrão sugere..."
+          value={d.sobre} onChange={(e) => set({ sobre: e.target.value })}
+          style={{ width: "100%", minHeight: 70, padding: "12px 13px", fontSize: 14, fontFamily: "inherit", marginBottom: 16, resize: "none" }} />
+
+        <div className="eb" style={{ marginBottom: 7, fontWeight: 700 }}>Qual é o seu objetivo?</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          {[["perder", "Perder peso"], ["manter", "Manter peso"], ["ganhar", "Ganhar peso"]].map(([k, lb]) => (
+            <button key={k} className="chip" data-on={d.objetivo === k ? "1" : "0"} style={{ flex: 1 }} onClick={() => set({ objetivo: k })}>{lb}</button>
+          ))}
+        </div>
+        {d.objetivo && d.objetivo !== "manter" && (
+          <div style={{ marginBottom: 16 }}>
+            <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Peso que você gostaria de atingir (kg)</div>
+            <input className="num" inputMode="decimal" placeholder={d.objetivo === "perder" ? "75" : "88"} value={d.pesoMeta}
+              onChange={(e) => set({ pesoMeta: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
+          </div>
+        )}
+
+        <div className="eb" style={{ marginBottom: 7, fontWeight: 700 }}>Sua composição corporal (opcional, mas deixa a conta bem mais precisa)</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+          <button className="chip" data-on={!modoMedidas ? "1" : "0"} style={{ flex: 1 }} onClick={() => set({ modoComposicao: "perc" })}>Já sei minha %</button>
+          <button className="chip" data-on={modoMedidas ? "1" : "0"} style={{ flex: 1 }} onClick={() => set({ modoComposicao: "medidas" })}>Prefiro me medir</button>
+        </div>
+        {!modoMedidas ? (
+          <input className="num" inputMode="decimal" placeholder="% de gordura — ex.: 14, deixe em branco se não souber" value={d.percGordura}
+            onChange={(e) => set({ percGordura: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div className="eb" style={{ marginBottom: 4 }}>Pescoço (cm)</div>
+                <input className="num" inputMode="decimal" placeholder="38" value={d.medPescoco} onChange={(e) => set({ medPescoco: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className="eb" style={{ marginBottom: 4 }}>Cintura, no umbigo (cm)</div>
+                <input className="num" inputMode="decimal" placeholder="88" value={d.medCintura} onChange={(e) => set({ medCintura: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
+              </div>
+            </div>
+            {d.sexo === "f" && (
+              <div style={{ marginBottom: 10 }}>
+                <div className="eb" style={{ marginBottom: 4 }}>Quadril (cm)</div>
+                <input className="num" inputMode="decimal" placeholder="102" value={d.medQuadril} onChange={(e) => set({ medQuadril: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
+              </div>
+            )}
+            {(() => {
+              const pct = pctGorduraMarinha(Number(d.medPescoco), Number(d.medCintura), Number(d.altura), Number(d.medQuadril), d.sexo);
+              return (
+                <div style={{ background: "var(--violet-s)", color: "var(--violet-d)", borderRadius: 11, padding: "11px 13px", fontSize: 12.5, fontWeight: 700 }}>
+                  {pct ? `≈ ${n1(pct)}% de gordura estimada` : "Preencha as medidas pra calcular sua % de gordura."}
+                </div>
+              );
+            })()}
+          </>
+        )}
+      </>
+    ), { disabled: !d.objetivo || (d.objetivo !== "manter" && !d.pesoMeta) });
+  }
+
+  if (PASSOS[passo] === "atividade") {
+    return wrap("Sua rotina", "Pra estimar seu gasto calórico diário direito.", (
+      <>
+        <div className="eb" style={{ marginBottom: 7, fontWeight: 700 }}>No seu dia a dia, você é:</div>
+        {Object.entries(FATORES_ATIVIDADE).map(([k, v]) => (
+          <button key={k} onClick={() => set({ atividade: k })}
+            style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${d.atividade === k ? "var(--violet)" : "var(--rule)"}`, background: d.atividade === k ? "var(--violet-s)" : "#fff", marginBottom: 8 }}>
+            <div><div style={{ fontSize: 13.5, fontWeight: 700 }}>{v.t}</div><div className="eb" style={{ marginTop: 2 }}>{v.d}</div></div>
+          </button>
+        ))}
+        <div className="eb" style={{ margin: "10px 0 7px", fontWeight: 700 }}>Como você diria que é sua alimentação hoje?</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {[["boa", "Bem estruturada"], ["regular", "Razoável"], ["ruim", "Bem irregular"]].map(([k, lb]) => (
+            <button key={k} className="chip" data-on={d.qualidadeAlimentar === k ? "1" : "0"} style={{ flex: 1, fontSize: 11.5 }} onClick={() => set({ qualidadeAlimentar: k })}>{lb}</button>
+          ))}
+        </div>
+      </>
+    ), { disabled: !(d.atividade && d.qualidadeAlimentar) });
+  }
+
+  if (PASSOS[passo] === "prazo") {
+    const idade = idadeAtual();
+    const tmb = calcTMB(Number(d.peso), Number(d.altura), idade, d.sexo, Number(d.percGordura));
+    const tdee = calcTDEE(tmb, d.atividade);
+    const recSemanas = semanasRecomendadas(Number(d.peso), Number(d.pesoMeta));
+    const semanas = d.prazoSemanas || recSemanas;
+    const meta = calcMetaCalorica(tdee, d.objetivo, Number(d.peso), Number(d.pesoMeta), semanas);
+    const meses = (semanas / 4.33).toFixed(1);
+    const usandoGordura = d.percGordura && Number(d.percGordura) > 3 && Number(d.percGordura) < 60;
+    return wrap("Em quanto tempo?", null, (
+      <>
+        <div className="eb" style={{ marginBottom: 16, lineHeight: 1.5 }}>
+          Seu gasto calórico estimado hoje é de <b style={{ color: "var(--ink)" }}>{Math.round(tdee)} kcal/dia</b>{usandoGordura ? " · considerando sua massa magra" : ""}.
+        </div>
+        <div style={{ textAlign: "center", fontSize: 26, fontWeight: 800, color: "var(--coral-d)", marginBottom: 8 }}>{meses} meses</div>
+        <input type="range" min="8" max="52" step="1" value={semanas} onChange={(e) => set({ prazoSemanas: Number(e.target.value) })} style={{ marginBottom: 6 }} />
+        <div className="row" style={{ marginBottom: 16 }}><span className="eb">2 meses</span><span className="eb">1 ano</span></div>
+        <div style={{ background: "var(--lime-s)", color: "var(--lime-d)", borderRadius: 13, padding: 14, fontSize: 13, lineHeight: 1.5 }}>
+          💡 Recomendamos pelo menos <b>{(recSemanas / 4.33).toFixed(1)} meses</b> pra {d.objetivo === "perder" ? "perder" : "ganhar"} {Math.abs(Number(d.peso) - Number(d.pesoMeta)).toFixed(0)}kg de forma sustentável — nesse ritmo, sua meta diária ficaria em torno de <b>{meta} kcal/dia</b>.
+        </div>
+      </>
+    ));
+  }
+
+  if (PASSOS[passo] === "config-dieta") {
+    const custom = d.usarMacrosCustom;
+    const p = Number(d.macroProt) || 0, c = Number(d.macroCarb) || 0, g = Number(d.macroGord) || 0;
+    const kcalCustom = p * 4 + c * 4 + g * 9;
+    return wrap("Só mais alguns detalhes", "Pra distribuir as refeições no seu horário certo.", (
+      <>
+        <div className="eb" style={{ marginBottom: 7, fontWeight: 700 }}>Quantas refeições por dia?</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          {[2, 3, 4, 5, 6].map((n) => (
+            <button key={n} className="chip" data-on={d.numRefeicoes === n ? "1" : "0"} style={{ flex: 1 }} onClick={() => set({ numRefeicoes: n })}>{n}</button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <div style={{ flex: 1 }}><div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Acorda às</div><input type="time" value={d.horaAcordar} onChange={(e) => set({ horaAcordar: e.target.value })} /></div>
+          <div style={{ flex: 1 }}><div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>Dorme às</div><input type="time" value={d.horaDormir} onChange={(e) => set({ horaDormir: e.target.value })} /></div>
+        </div>
+
+        <div className="eb" style={{ marginBottom: 4, fontWeight: 700 }}>🎙 Conte sobre seus hábitos alimentares (opcional)</div>
+        <textarea placeholder="ex.: fico com muita fome à noite, bato proteína rápido, gosto de doce, faço jejum intermitente..."
+          value={d.habitos} onChange={(e) => set({ habitos: e.target.value })}
+          style={{ width: "100%", minHeight: 70, padding: "12px 13px", fontSize: 14, fontFamily: "inherit", marginBottom: 16, resize: "none" }} />
+
+        <button onClick={() => set({ usarMacrosCustom: !custom })}
+          style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${custom ? "var(--violet)" : "var(--rule)"}`, background: custom ? "var(--violet-s)" : "#fff", marginBottom: custom ? 16 : 4 }}>
+          <div><div style={{ fontSize: 13.5, fontWeight: 700 }}>Quero definir meus próprios macros</div><div className="eb" style={{ marginTop: 2 }}>Em vez de calcular automaticamente</div></div>
+        </button>
+
+        {custom && (
+          <>
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}><div className="eb" style={{ marginBottom: 4 }}>Carboidrato (g)</div><input className="num" inputMode="numeric" placeholder="250" value={d.macroCarb} onChange={(e) => set({ macroCarb: e.target.value.replace(/\D/g, "") })} style={{ textAlign: "center" }} /></div>
+              <div style={{ flex: 1 }}><div className="eb" style={{ marginBottom: 4 }}>Proteína (g)</div><input className="num" inputMode="numeric" placeholder="180" value={d.macroProt} onChange={(e) => set({ macroProt: e.target.value.replace(/\D/g, "") })} style={{ textAlign: "center" }} /></div>
+              <div style={{ flex: 1 }}><div className="eb" style={{ marginBottom: 4 }}>Gordura (g)</div><input className="num" inputMode="numeric" placeholder="80" value={d.macroGord} onChange={(e) => set({ macroGord: e.target.value.replace(/\D/g, "") })} style={{ textAlign: "center" }} /></div>
+            </div>
+            <div style={{ background: "linear-gradient(135deg,var(--violet-s),var(--coral-s))", borderRadius: 13, padding: 14, textAlign: "center" }}>
+              <div className="eb" style={{ fontWeight: 800, color: "var(--violet-d)" }}>CALORIAS CALCULADAS</div>
+              <div className="num" style={{ fontSize: 22, fontWeight: 800, margin: "3px 0" }}>{Math.round(kcalCustom)} kcal/dia</div>
+              <div className="eb">{c}g carbo + {p}g proteína + {g}g gordura</div>
+            </div>
+          </>
+        )}
+      </>
+    ), { label: "Montar minha dieta" });
+  }
+
+  // resultado
+  const idade = idadeAtual();
+  const tmb = calcTMB(Number(d.peso), Number(d.altura), idade, d.sexo, Number(d.percGordura));
+  const tdee = calcTDEE(tmb, d.atividade);
+  const semanasR = d.objetivo === "manter" ? null : d.prazoSemanas;
+  const kcalAlvo = d.objetivo === "manter" ? tdee : calcMetaCalorica(tdee, d.objetivo, Number(d.peso), Number(d.pesoMeta), semanasR);
+  const macros = d.usarMacrosCustom && d.macroProt && d.macroCarb && d.macroGord
+    ? { prot: Number(d.macroProt), carb: Number(d.macroCarb), gord: Number(d.macroGord), kcal: Math.round(Number(d.macroProt) * 4 + Number(d.macroCarb) * 4 + Number(d.macroGord) * 9) }
+    : calcMacrosAuto(kcalAlvo, Number(d.peso));
+  const refeicoesPreview = gerarRefeicoesOnboarding(macros, d.numRefeicoes, d.horaAcordar, d.horaDormir);
+  return wrap("Dá uma olhada na sua dieta 🎉", 'Isso vai virar sua "Dieta Padrão" — mas primeiro, aprova? Se algo não fizer sentido, dá pra ajustar antes.', (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+        <div style={{ background: "var(--bg)", borderRadius: 12, padding: 12 }}><div className="eb" style={{ fontWeight: 700 }}>META DIÁRIA</div><div className="num" style={{ fontSize: 16, fontWeight: 800 }}>{macros.kcal} kcal</div></div>
+        <div style={{ background: "var(--bg)", borderRadius: 12, padding: 12 }}><div className="eb" style={{ fontWeight: 700 }}>{d.objetivo === "perder" ? "DÉFICIT" : d.objetivo === "ganhar" ? "SUPERÁVIT" : "MANUTENÇÃO"}</div><div className="num" style={{ fontSize: 16, fontWeight: 800 }}>{d.objetivo === "manter" ? "—" : Math.abs(Math.round(tdee - kcalAlvo)) + " kcal"}</div></div>
+        <div style={{ background: "var(--bg)", borderRadius: 12, padding: 12 }}><div className="eb" style={{ fontWeight: 700 }}>PROTEÍNA</div><div className="num" style={{ fontSize: 16, fontWeight: 800 }}>{macros.prot}g</div></div>
+        <div style={{ background: "var(--bg)", borderRadius: 12, padding: 12 }}><div className="eb" style={{ fontWeight: 700 }}>CARBO / GORDURA</div><div className="num" style={{ fontSize: 16, fontWeight: 800 }}>{macros.carb}g / {macros.gord}g</div></div>
+      </div>
+
+      {refeicoesPreview.map((r) => (
+        <div key={r.id} style={{ background: "var(--bg)", borderRadius: 13, padding: 14, marginBottom: 9 }}>
+          <div className="row" style={{ marginBottom: 9 }}><span style={{ fontSize: 14, fontWeight: 700 }}>{r.nome}</span><span className="num" style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink2)" }}>{r.hora}</span></div>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            <span className="pill" style={{ background: "var(--coral-s)", color: "var(--coral-d)" }}>Kcal {r.alvo.kcal}</span>
+            <span className="pill" style={{ background: "var(--orange-s)", color: "var(--orange-d)" }}>Carbo {r.alvo.carb}g</span>
+            <span className="pill" style={{ background: "var(--lime-s)", color: "var(--lime-d)" }}>Prot {r.alvo.prot}g</span>
+            <span className="pill" style={{ background: "var(--violet-s)", color: "var(--violet-d)" }}>Gord {r.alvo.gord}g</span>
+          </div>
+        </div>
+      ))}
+
+      <div className="eb" style={{ margin: "10px 0 8px", fontWeight: 700 }}>Seu perfil</div>
+      <div className="card" style={{ padding: "4px 15px" }}>
+        {[["Dados básicos", true], ["Objetivo e rotina", true], ["Dieta padrão", true]].map(([t, ok], i) => (
+          <div key={t} className="row" style={{ padding: "9px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{t}</span>
+            <span className="pill" style={{ background: "var(--lime-s)", color: "var(--lime-d)" }}>✓</span>
+          </div>
+        ))}
+        {["Medicamentos", "Suplementos", "Humor"].map((t) => (
+          <div key={t} className="row" style={{ padding: "9px 0", borderTop: "1px solid var(--rule)" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink2)" }}>{t}</span>
+            <span className="eb">configure em Definições</span>
+          </div>
+        ))}
+      </div>
+    </>
+  ), { label: "Aprovar e continuar", onNext: finalizar });
 }
 
 export default function Nutri({ metadadosConta }) {
@@ -540,11 +968,14 @@ export default function Nutri({ metadadosConta }) {
       <div className="nx"><style>{CSS}</style><style>{CSS_STICKY}</style>
         <Onboarding metadadosConta={metadadosConta} onSalvar={(perfil) => {
           const hoje = iso(new Date());
+          if (perfil.fotoData) window.storage.set("foto:perfil", perfil.fotoData).catch(() => {});
           persist({
             ...data,
             perfilConta: { nome: perfil.nome, nascimento: perfil.nascimento, genero: perfil.genero, telefone: perfil.telefone },
             altura: perfil.altura ? Number(perfil.altura) : data.altura,
             pesos: perfil.peso ? { ...(data.pesos || {}), [hoje]: Number(perfil.peso) } : data.pesos,
+            medicoes: perfil.medida ? { ...(data.medicoes || {}), [hoje]: perfil.medida } : data.medicoes,
+            config: { ...cfg, refeicoesModelos: [perfil.dietaModelo] },
           });
         }} />
       </div>
@@ -2517,20 +2948,18 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
 
       <FaixaHistorico icone="📏" titulo="Evolução de medidas" contagem={Object.keys(data.medicoes || {}).length}
         aberto={abertoMedidas} onToggle={() => setAbertoMedidas(!abertoMedidas)}>
+        <MedicoesTabela medicoes={data.medicoes || {}} />
+        <div style={{ height: 1, background: "var(--rule)", margin: "16px 0" }} />
         <MedicoesPanel medicoes={data.medicoes || {}} altura={data.altura} onAltura={onAltura}
           onSalvar={(dataChave, valores) => onSalvarMedicao(dataChave, valores)} />
-        <div style={{ marginTop: 10 }}>
-          <MedicoesTabela medicoes={data.medicoes || {}} />
-        </div>
       </FaixaHistorico>
 
       <FaixaHistorico icone="🧪" titulo="Evolução de exames" contagem={Object.keys(data.exames || {}).length}
         aberto={abertoExames} onToggle={() => setAbertoExames(!abertoExames)}>
+        <ExamesTabela campos={data.examesCampos || []} exames={data.exames || {}} />
+        <div style={{ height: 1, background: "var(--rule)", margin: "16px 0" }} />
         <ExamesPanel campos={data.examesCampos || []} exames={data.exames || {}} contextos={data.exameContexto || {}}
           onCampos={onExamesCampos} onSalvar={onSalvarExame} onContexto={onExameContexto} />
-        <div style={{ marginTop: 10 }}>
-          <ExamesTabela campos={data.examesCampos || []} exames={data.exames || {}} />
-        </div>
       </FaixaHistorico>
 
       <FaixaHistorico icone="📸" titulo="Evolução de fotografias" contagem={Object.keys(data.fotosIndex || {}).length}
@@ -3108,6 +3537,7 @@ function ExamesPanel({ campos, exames, contextos, onCampos, onSalvar, onContexto
   const [erro, setErro] = useState("");
   const [revisao, setRevisao] = useState(null);
   const [verData, setVerData] = useState(null);
+  const [valoresEdit, setValoresEdit] = useState({});
   const [manNome, setManNome] = useState(""); const [manValor, setManValor] = useState(""); const [manUnidade, setManUnidade] = useState("");
   const [ctx, setCtx] = useState({ momento: "", dose: "", anaPeriodicidade: "", anaUltima: "" });
   const fileRef = useRef(null);
@@ -3132,6 +3562,10 @@ function ExamesPanel({ campos, exames, contextos, onCampos, onSalvar, onContexto
   const datas = Object.keys(exames).sort().reverse();
 
   async function processarArquivo(file) {
+    if (file.size > 4 * 1024 * 1024) {
+      setErro("Esse arquivo tem mais de 4MB — a função do servidor não aceita arquivos tão grandes. Se for um PDF escaneado (fotos das páginas), tente exportar como PDF de texto, ou envie só as páginas de resultado em vez do laudo inteiro.");
+      return;
+    }
     setProc(true); setErro("");
     try {
       const b64 = await new Promise((res, rej) => {
@@ -3145,13 +3579,19 @@ function ExamesPanel({ campos, exames, contextos, onCampos, onSalvar, onContexto
       const resp = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-5", max_tokens: 1000,
+          model: "claude-sonnet-5", max_tokens: 8000,
           messages: [{ role: "user", content: [bloco, {
-            type: "text", text: `Extraia todos os resultados numéricos de exames laboratoriais deste documento. Ignore tabelas de referência, notas e textos explicativos — só o resultado medido de cada exame.
+            type: "text", text: `Este documento é um laudo de exames laboratoriais brasileiro — pode ter várias páginas e várias seções diferentes (hematologia, bioquímica, hormônios, urina, etc). Percorra o documento INTEIRO, do início ao fim, sem pular nenhuma página nem nenhuma seção, mesmo que sejam muitas.
 
-Para resultados do tipo "Inferior a X" ou "Superior a X" (abaixo do limite de detecção), use o valor X mesmo assim.
+Extraia TODOS os resultados numéricos medidos (não deixe nenhum de fora). Para cada um:
+- Ignore faixas de referência, texto explicativo, dados do paciente/laboratório e assinaturas — só o valor medido de cada exame.
+- Nomeie o exame de forma reconhecível (ex.: "Hemoglobina", "Colesterol Total", "TSH", "Testosterona Total") — se houver sigla e nome por extenso, prefira o nome por extenso.
+- Números no documento costumam usar vírgula como separador decimal (ex.: "15,9") — converta corretamente para o formato numérico do JSON (15.9), nunca deixe a vírgula no valor.
+- Para resultados como "Inferior a X" ou "< X" (abaixo do limite de detecção), use o valor X.
+- Se o mesmo exame aparecer mais de uma vez no documento (ex.: repetido em página de resumo), inclua só uma vez, com o valor mais completo/confiável.
+- Não invente exames que não estão no documento, e não pule nenhum que esteja.
 
-Responda APENAS com um JSON compacto, sem markdown, sem espaços supérfluos, nesse formato — "n" é o nome do exame, "v" é o valor numérico, "u" é a unidade:
+Responda APENAS com um JSON compacto, sem markdown, sem comentários, sem texto antes ou depois — "n" é o nome do exame, "v" é o valor numérico, "u" é a unidade tal como aparece no documento:
 [{"n":"Hemoglobina","v":15.9,"u":"g/dL"},{"n":"Glicose","v":87,"u":"mg/dL"}]` }] }],
         }),
       });
@@ -3162,7 +3602,7 @@ Responda APENAS com um JSON compacto, sem markdown, sem espaços supérfluos, ne
       setRevisao(arr.map((x) => ({ nome: x.n, valor: String(x.v), unidade: x.u || "" })));
       setModo("revisar");
     } catch {
-      setErro("Não consegui ler os índices deste arquivo. Tente novamente, ou adicione manualmente abaixo.");
+      setErro("Não consegui ler os índices deste arquivo — pode ser um documento grande demais ou digitalização de baixa qualidade. Tente de novo, ou envie um PDF só com as páginas de resultado (sem capa), ou adicione manualmente abaixo.");
     }
     setProc(false);
   }
@@ -3251,7 +3691,7 @@ Responda APENAS com um JSON compacto, sem markdown, sem espaços supérfluos, ne
         <>
           {datas.length === 0 && <div className="eb" style={{ padding: "6px 0" }}>Nenhum exame ainda. Todo índice novo que aparecer é adicionado sozinho ao catálogo.</div>}
           {datas.map((d, i) => (
-            <button key={d} onClick={() => setVerData(d)} style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", padding: "8px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
+            <button key={d} onClick={() => { setVerData(d); const v = {}; Object.entries(exames[d]).forEach(([k, val]) => v[k] = String(val)); setValoresEdit(v); }} style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", padding: "8px 0", borderTop: i ? "1px solid var(--rule)" : 0 }}>
               <div className="row">
                 <span style={{ fontSize: 12.5 }}>{label(d)}</span>
                 <span className="num" style={{ fontSize: 12, color: "var(--ink2)" }}>{Object.keys(exames[d]).length} índices</span>
@@ -3319,14 +3759,23 @@ Responda APENAS com um JSON compacto, sem markdown, sem espaços supérfluos, ne
               const c = campos.find((x) => x.key === key);
               return (
                 <div key={key} className="item">
-                  <div className="row">
-                    <span style={{ fontSize: 13.5 }}>{c ? c.nome : key}</span>
-                    <span className="num" style={{ fontSize: 13, fontWeight: 700 }}>{n1(v)} {c ? c.unidade : ""}</span>
+                  <div className="row" style={{ gap: 8 }}>
+                    <span style={{ fontSize: 13.5, flex: 1 }}>{c ? c.nome : key}</span>
+                    <input className="num" inputMode="decimal" value={valoresEdit[key] != null ? valoresEdit[key] : String(v)}
+                      onChange={(e) => setValoresEdit({ ...valoresEdit, [key]: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })}
+                      style={{ width: 84, padding: "6px 8px", fontSize: 13, fontWeight: 700, textAlign: "center" }} />
+                    <span className="eb" style={{ width: 34 }}>{c ? c.unidade : ""}</span>
                   </div>
                 </div>
               );
             })}
           </div>
+          <button className="cta" style={{ width: "100%", marginTop: 12 }} onClick={() => {
+            const valoresNumericos = {};
+            Object.entries(valoresEdit).forEach(([k, v]) => { if (v !== "") valoresNumericos[k] = Number(v); });
+            onSalvar(verData, valoresNumericos, campos);
+            setVerData(null);
+          }}>Salvar alterações</button>
         </div>
       )}
     </div>
@@ -3472,7 +3921,7 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
   }
 
   async function excluirConta() {
-    const ok = window.confirm("Isso vai apagar TODOS os seus dados (refeições, medições, exames, fotos, tudo) de forma definitiva e sem volta. Sua conta de e-mail continua existindo, mas fica vazia. Tem certeza que quer continuar?");
+    const ok = window.confirm("Isso vai apagar TODOS os seus dados (refeições, medições, exames, fotos, tudo) de forma definitiva e sem volta. Isso NÃO exclui sua conta — seu login continua funcionando normalmente, só que com tudo vazio, como se fosse a primeira vez. Tem certeza que quer continuar?");
     if (!ok) return;
     const { data: u } = await supabase.auth.getUser();
     if (!u?.user) return;
@@ -3616,7 +4065,7 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
             </button>
             <button className="ghost" style={{ width: "100%", padding: 13, color: "#fff", background: "var(--coral-d)", borderColor: "var(--coral-d)", fontWeight: 700 }}
               onClick={excluirConta}>
-              Excluir conta e todos os dados
+              Excluir todos os meus dados
             </button>
           </div>
         )}
