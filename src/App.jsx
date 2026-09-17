@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { supabase } from "./supabaseClient.js";
 import Logo from "./Logo.jsx";
+import { lerLaudo } from "./exames.js";
+import MeusArquivos, { enviarArquivo, indiceArquivos, removerArquivosStorage, PASTA_EXAMES } from "./MeusArquivos.jsx";
 
 const KEY = "nutri:v4";
 const LEGADO = ["nutri:v3", "nutri:v2"];
@@ -151,7 +153,7 @@ function itemDue(historico, day) {
   return d >= 0 && d % cadaDias === 0;
 }
 function migrarPerfilOnboarding(dados, meta) {
-  if (!meta || !meta.nome || dados.perfilConta) return dados;
+  if (!meta || !meta.nome || dados.perfilConta || dados.refazerOnboarding) return dados;
   const hoje = iso(new Date());
   return {
     ...dados,
@@ -361,6 +363,9 @@ const CSS = `
 --orange:#F5A623;--orange-d:#B87409;--orange-s:#FEF3DE;
 --violet:#7B61FF;--violet-d:#5138D6;--violet-s:#EDE9FF;
 --blue:#3B9FE0;--blue-d:#0B4568;--blue-s:#E3F3FC;
+--surface:#FFFFFF;--on-ink:#FFFFFF;--shadow-rgb:27,37,89;
+--nav-bg:rgba(255,255,255,.94);--nav-ink:var(--ink3);--nav-on:var(--coral);--nav-on-bg:var(--coral-s);--nav-edge:transparent;
+color-scheme:light;
 background:var(--bg);color:var(--ink);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
 min-height:100%;padding:14px 14px 88px;-webkit-font-smoothing:antialiased;position:relative;letter-spacing:-.01em}
 .nx{max-width:480px;margin:0 auto}
@@ -371,6 +376,9 @@ min-height:100%;padding:14px 14px 88px;-webkit-font-smoothing:antialiased;positi
 --orange:#FFB84D;--orange-d:#FFD08A;--orange-s:#2E2210;
 --violet:#9C87FF;--violet-d:#C3B6FF;--violet-s:#241E45;
 --blue:#5CB6F0;--blue-d:#9AD4F5;--blue-s:#122232;
+--surface:#22263A;--on-ink:#12141F;--shadow-rgb:0,0,0;
+--nav-bg:rgba(27,30,46,.92);--nav-ink:#6B7394;--nav-on:#B3A4FF;--nav-on-bg:#2C2552;--nav-edge:#2A2E42;
+color-scheme:dark;
 background:var(--bg);color:var(--ink)}
 .nx[data-tema="hardcore"]{
 --bg:#0A0A0A;--card:#171717;--ink:#FFFFFF;--ink2:#A0A0A0;--ink3:#6B6B6B;--rule:#2B2B2B;
@@ -379,6 +387,9 @@ background:var(--bg);color:var(--ink)}
 --orange:#FF8A00;--orange-d:#FFB347;--orange-s:#2E1800;
 --violet:#B026FF;--violet-d:#D580FF;--violet-s:#20082E;
 --blue:#00C2FF;--blue-d:#7FE0FF;--blue-s:#001E2E;
+--surface:#202020;--on-ink:#0A0A0A;--shadow-rgb:0,0,0;
+--nav-bg:rgba(10,10,10,.94);--nav-ink:#5E5E5E;--nav-on:#FF1F3D;--nav-on-bg:#2E0A0E;--nav-edge:#FF1F3D;
+color-scheme:dark;
 background:var(--bg);color:var(--ink)}
 .nx[data-tema="feminino"]{
 --bg:#FFF6F8;--card:#FFFFFF;--ink:#5A3B49;--ink2:#B98C9B;--ink3:#D9B8C4;--rule:#F6DCE4;
@@ -387,74 +398,89 @@ background:var(--bg);color:var(--ink)}
 --orange:#FFC98A;--orange-d:#E29A3F;--orange-s:#FFF1DE;
 --violet:#C9A6FF;--violet-d:#9A6FE0;--violet-s:#F1E7FF;
 --blue:#8FCBEE;--blue-d:#4E9BC7;--blue-s:#EAF6FD;
+--surface:#FFFFFF;--on-ink:#FFFFFF;--shadow-rgb:90,59,73;
+--nav-bg:rgba(255,255,255,.94);--nav-ink:#D9B8C4;--nav-on:#E4547E;--nav-on-bg:#FFE3EC;--nav-edge:transparent;
+color-scheme:light;
 background:var(--bg);color:var(--ink)}
 @media (min-width:540px){
-  .nx{box-shadow:0 0 0 1px var(--rule),0 12px 40px rgba(27,37,89,.08);min-height:100vh}
+  .nx{box-shadow:0 0 0 1px var(--rule),0 12px 40px rgba(var(--shadow-rgb),.08);min-height:100vh}
   body{background:#E4E7EF}
 }
 .nx *{box-sizing:border-box}
 .nx .num{font-variant-numeric:tabular-nums}
 .nx .eb{font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--ink2)}
-.nx .card{background:var(--card);border-radius:16px;box-shadow:0 1px 2px rgba(27,37,89,.06),0 6px 16px rgba(27,37,89,.04)}
+.nx .card{background:var(--card);border-radius:16px;box-shadow:0 1px 2px rgba(var(--shadow-rgb),.06),0 6px 16px rgba(var(--shadow-rgb),.04)}
 .nx button{font:inherit;cursor:pointer;border-radius:12px;border:0}
 .nx button:focus-visible,.nx input:focus-visible,.nx textarea:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
-.nx input,.nx textarea{font:inherit;background:#fff;border:1.5px solid var(--rule);border-radius:10px;color:var(--ink);padding:10px 11px;width:100%}
+.nx input,.nx textarea,.nx select{font:inherit;background:var(--surface);border:1.5px solid var(--rule);border-radius:10px;color:var(--ink);padding:10px 11px;width:100%}
 .nx input::placeholder,.nx textarea::placeholder{color:var(--ink3)}
 .nx textarea{resize:none}
 .nx .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 
 .nx .hero{width:100%;background:var(--coral);color:#fff;padding:8px;display:flex;align-items:center;gap:12px;
-border-radius:999px;box-shadow:0 4px 14px rgba(245,56,93,.32);font-weight:600;font-size:15px;margin-bottom:14px}
+border-radius:999px;box-shadow:0 4px 14px rgba(var(--coral-rgb,245,56,93),.32);font-weight:600;font-size:15px;margin-bottom:14px}
 .nx .hero:active{transform:scale(.985)}
-.nx .hero[data-on="1"]{background:var(--ink);box-shadow:0 4px 14px rgba(27,37,89,.3)}
+.nx .hero[data-on="1"]{background:var(--ink);color:var(--on-ink);box-shadow:0 4px 14px rgba(var(--shadow-rgb),.3)}
 .nx .heroIcon{width:44px;height:44px;border-radius:999px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto}
 
 .nx .fab{position:fixed;right:20px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:45;
 width:56px;height:56px;border-radius:999px;background:var(--coral);color:#fff;font-size:26px;line-height:1;
-display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(245,56,93,.4)}
+display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(var(--coral-rgb,245,56,93),.4)}
 .nx .fab:active{transform:scale(.94)}
-.nx .fab[data-on="1"]{background:var(--ink)}
+.nx .fab[data-on="1"]{background:var(--ink);color:var(--on-ink)}
 .nx .fabMenu{position:fixed;right:20px;bottom:calc(146px + env(safe-area-inset-bottom));z-index:46;display:flex;flex-direction:column;gap:9px;align-items:flex-end}
 @media (min-width:540px){
   .nx .fab{right:calc(50% - 240px + 20px)}
   .nx .fabMenu{right:calc(50% - 240px + 20px)}
 }
 
-.nx .strip{background:var(--card);border-radius:14px;padding:10px 13px;margin-bottom:12px;box-shadow:0 1px 2px rgba(27,37,89,.05)}
+.nx .strip{background:var(--card);border-radius:14px;padding:10px 13px;margin-bottom:12px;box-shadow:0 1px 2px rgba(var(--shadow-rgb),.05)}
 .nx .stripBtn{width:100%;background:transparent;padding:0;display:flex;align-items:center;justify-content:space-between;gap:8px}
 
 .nx .kcal{font-size:40px;line-height:1;font-weight:800;letter-spacing:-.04em}
 .nx .track{height:8px;background:var(--rule);border-radius:999px;overflow:hidden}
 .nx .fill{height:100%;transition:width .35s ease;border-radius:999px}
 .nx .pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
-.nx .cta{background:var(--coral);color:#fff;padding:13px 14px;font-weight:600;font-size:15px;width:100%;border-radius:12px;box-shadow:0 3px 10px rgba(245,56,93,.26)}
+.nx .cta{background:var(--coral);color:#fff;padding:13px 14px;font-weight:600;font-size:15px;width:100%;border-radius:12px;box-shadow:0 3px 10px rgba(var(--coral-rgb,245,56,93),.26)}
 .nx .cta:disabled{opacity:.4;box-shadow:none;cursor:default}
-.nx .dark{background:var(--ink);color:#fff;padding:13px 14px;font-weight:600;font-size:15px;width:100%;border-radius:12px}
-.nx .ghost{background:#fff;color:var(--ink);padding:9px 12px;font-size:13px;font-weight:600;border:1.5px solid var(--rule);border-radius:10px}
-.nx .ghost[data-on="1"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.nx .dark{background:var(--ink);color:var(--on-ink);padding:13px 14px;font-weight:600;font-size:15px;width:100%;border-radius:12px}
+.nx .ghost{background:var(--surface);color:var(--ink);padding:9px 12px;font-size:13px;font-weight:600;border:1.5px solid var(--rule);border-radius:10px}
+.nx .ghost[data-on="1"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
 .nx .soft{background:var(--coral-s);color:var(--coral-d);padding:9px 12px;font-size:13px;font-weight:600;border-radius:10px}
 .nx .mini{background:transparent;color:var(--ink2);padding:4px 8px;font-size:14px;font-weight:600}
 .nx .item{border-top:1px solid var(--rule);padding:10px 0}
 .nx .ribbon{display:flex;height:100%;border-radius:999px;overflow:hidden}
 .nx .sheet{position:fixed;inset:0;background:var(--bg);z-index:60;padding:14px 14px 30px;overflow-y:auto}
 @media (min-width:540px){
-  .nx .sheet{left:50%;right:auto;transform:translateX(-50%);width:480px;box-shadow:0 0 0 1px var(--rule),0 12px 40px rgba(27,37,89,.12)}
+  .nx .sheet{left:50%;right:auto;transform:translateX(-50%);width:480px;box-shadow:0 0 0 1px var(--rule),0 12px 40px rgba(var(--shadow-rgb),.12)}
 }
-.nx .chip{background:#fff;border:1.5px solid var(--rule);padding:7px 12px;font-size:12.5px;white-space:nowrap;font-weight:600;border-radius:999px;color:var(--ink2)}
+.nx .chip{background:var(--surface);border:1.5px solid var(--rule);padding:7px 12px;font-size:12.5px;white-space:nowrap;font-weight:600;border-radius:999px;color:var(--ink2)}
 .nx .chip[data-on="1"]{background:var(--coral-s);color:var(--coral-d);border-color:var(--coral-s)}
 .nx .star{background:transparent;padding:4px 6px;font-size:16px;line-height:1;color:var(--ink3)}
 .nx .star[data-on="1"]{color:var(--orange)}
 .nx .box{width:20px;height:20px;border:2px solid var(--rule);border-radius:7px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
 .nx .box[data-on="1"]{background:var(--lime);border-color:var(--lime)}
-.nx .menu{position:absolute;right:0;top:100%;z-index:20;background:#fff;border-radius:14px;min-width:210px;box-shadow:0 8px 28px rgba(27,37,89,.18);overflow:hidden;padding:5px}
-.nx .menu button{display:block;width:100%;text-align:left;background:transparent;padding:11px 12px;font-size:13.5px;border-radius:9px;font-weight:500}
-.nx .nav{position:fixed;left:0;right:0;bottom:0;z-index:40;background:#fff;display:flex;
-box-shadow:0 -2px 14px rgba(27,37,89,.08);padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+.nx .menu{position:absolute;right:0;top:100%;z-index:20;background:var(--surface);border:1px solid var(--rule);border-radius:14px;min-width:210px;box-shadow:0 8px 28px rgba(var(--shadow-rgb),.18);overflow:hidden;padding:5px}
+.nx .menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--ink);padding:11px 12px;font-size:13.5px;border-radius:9px;font-weight:500}
+.nx .nav{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--nav-bg);display:flex;
+-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--nav-edge);
+box-shadow:0 -2px 14px rgba(var(--shadow-rgb),.08);padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
 @media (min-width:540px){
-  .nx .nav{left:50%;right:auto;transform:translateX(-50%);width:480px;box-shadow:0 -2px 14px rgba(27,37,89,.08),0 0 0 1px var(--rule)}
+  .nx .nav{left:50%;right:auto;transform:translateX(-50%);width:480px;box-shadow:0 -2px 14px rgba(var(--shadow-rgb),.08),0 0 0 1px var(--rule)}
 }
-.nx .nav button{flex:1;background:transparent;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--ink3);font-size:10.5px;font-weight:600}
-.nx .nav button[data-on="1"]{color:var(--coral)}
+.nx .nav button{flex:1;background:transparent;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--nav-ink);font-size:10.5px;font-weight:600;transition:color .15s}
+.nx .nav button .navIco{display:flex;align-items:center;justify-content:center;width:46px;height:28px;border-radius:999px;transition:background .15s}
+.nx .nav button[data-on="1"]{color:var(--nav-on)}
+.nx .nav button[data-on="1"] .navIco{background:var(--nav-on-bg)}
+.nx[data-tema="hardcore"] .nav{box-shadow:0 -6px 22px rgba(255,31,61,.18)}
+.nx[data-tema="hardcore"] .nav button{text-transform:uppercase;letter-spacing:.06em;font-size:9.5px;font-weight:800}
+.nx[data-tema="hardcore"] .nav button[data-on="1"] .navIco{box-shadow:0 0 12px rgba(255,31,61,.45)}
+.nx[data-tema="escuro"] .card,.nx[data-tema="hardcore"] .card{box-shadow:0 0 0 1px var(--rule)}
+.nx[data-tema="hardcore"] .card,.nx[data-tema="hardcore"] .strip{border-radius:10px}
+.nx[data-tema="hardcore"] .cta,.nx[data-tema="hardcore"] .hero{box-shadow:0 0 18px rgba(255,31,61,.35)}
+.nx .recharts-cartesian-grid line{stroke:var(--rule)}
+.nx .recharts-text{fill:var(--ink2)}
+.nx .recharts-default-tooltip{background:var(--surface)!important;border-color:var(--rule)!important;color:var(--ink)}
 @media (prefers-reduced-motion:reduce){.nx .fill{transition:none}}
 `;
 
@@ -485,7 +511,7 @@ function GeradorAvatarSVG(emoji, cor) {
 }
 
 function Onboarding({ metadadosConta, onSalvar }) {
-  const nomeInicial = (metadadosConta && (metadadosConta.full_name || metadadosConta.name)) || "";
+  const nomeInicial = (metadadosConta && (metadadosConta.nome || metadadosConta.full_name || metadadosConta.name)) || "";
   const PASSOS = ["dados", "foto", "imc-objetivo", "atividade", "prazo", "config-dieta", "resultado"];
   const [passo, setPasso] = useState(0);
   const [d, setD] = useState({
@@ -656,8 +682,8 @@ function Onboarding({ metadadosConta, onSalvar }) {
         ))}
 
         {d.editandoFoto && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(27,37,89,.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 80, padding: 20 }}>
-            <div style={{ background: "#fff", borderRadius: 18, padding: 20, maxWidth: 340, width: "100%" }}>
+          <div style={{ position: "fixed", inset: 0, background: "rgba(var(--shadow-rgb),.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 80, padding: 20 }}>
+            <div style={{ background: "var(--surface)", borderRadius: 18, padding: 20, maxWidth: 340, width: "100%" }}>
               <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12, textAlign: "center" }}>Ajustar foto</div>
               <div style={{ width: "100%", aspectRatio: "1", borderRadius: 14, overflow: "hidden", background: "#111", marginBottom: 14, position: "relative" }}>
                 <img ref={imgRef} src={d.fotoTemp} alt=""
@@ -755,7 +781,7 @@ function Onboarding({ metadadosConta, onSalvar }) {
         <div className="eb" style={{ marginBottom: 7, fontWeight: 700 }}>No seu dia a dia, você é:</div>
         {Object.entries(FATORES_ATIVIDADE).map(([k, v]) => (
           <button key={k} onClick={() => set({ atividade: k })}
-            style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${d.atividade === k ? "var(--violet)" : "var(--rule)"}`, background: d.atividade === k ? "var(--violet-s)" : "#fff", marginBottom: 8 }}>
+            style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${d.atividade === k ? "var(--violet)" : "var(--rule)"}`, background: d.atividade === k ? "var(--violet-s)" : "var(--surface)", marginBottom: 8 }}>
             <div><div style={{ fontSize: 13.5, fontWeight: 700 }}>{v.t}</div><div className="eb" style={{ marginTop: 2 }}>{v.d}</div></div>
           </button>
         ))}
@@ -816,7 +842,7 @@ function Onboarding({ metadadosConta, onSalvar }) {
           style={{ width: "100%", minHeight: 70, padding: "12px 13px", fontSize: 14, fontFamily: "inherit", marginBottom: 16, resize: "none" }} />
 
         <button onClick={() => set({ usarMacrosCustom: !custom })}
-          style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${custom ? "var(--violet)" : "var(--rule)"}`, background: custom ? "var(--violet-s)" : "#fff", marginBottom: custom ? 16 : 4 }}>
+          style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${custom ? "var(--violet)" : "var(--rule)"}`, background: custom ? "var(--violet-s)" : "var(--surface)", marginBottom: custom ? 16 : 4 }}>
           <div><div style={{ fontSize: 13.5, fontWeight: 700 }}>Quero definir meus próprios macros</div><div className="eb" style={{ marginTop: 2 }}>Em vez de calcular automaticamente</div></div>
         </button>
 
@@ -994,6 +1020,16 @@ export default function Nutri({ metadadosConta }) {
     return () => window.removeEventListener("scroll", aoRolar);
   }, [tab]);
 
+  const temaAtual = (data && data.tema) || "claro";
+  useEffect(() => {
+    const cores = { claro: ["#F5F6FA", "#F5385D"], escuro: ["#12141F", "#12141F"], hardcore: ["#0A0A0A", "#0A0A0A"], feminino: ["#FFF6F8", "#FF7AA2"] };
+    const [fundo, barra] = cores[temaAtual] || cores.claro;
+    document.body.style.background = fundo;
+    document.documentElement.style.background = fundo;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", barra);
+  }, [temaAtual]);
+
   if (!data) return <div className="nx"><style>{CSS}</style><style>{CSS_STICKY}</style><div className="eb">Carregando…</div></div>;
 
   if (!data.perfilConta) {
@@ -1002,8 +1038,9 @@ export default function Nutri({ metadadosConta }) {
         <Onboarding metadadosConta={metadadosConta} onSalvar={(perfil) => {
           const hoje = iso(new Date());
           if (perfil.fotoData) window.storage.set("foto:perfil", perfil.fotoData).catch(() => {});
+          const { refazerOnboarding, ...semFlag } = data;
           persist({
-            ...data,
+            ...semFlag,
             perfilConta: { nome: perfil.nome, nascimento: perfil.nascimento, genero: perfil.genero, telefone: perfil.telefone },
             altura: perfil.altura ? Number(perfil.altura) : data.altura,
             pesos: perfil.peso ? { ...(data.pesos || {}), [hoje]: Number(perfil.peso) } : data.pesos,
@@ -1014,6 +1051,8 @@ export default function Nutri({ metadadosConta }) {
       </div>
     );
   }
+  const nomeConta = (data.perfilConta && data.perfilConta.nome) || "";
+  const primeiroNome = nomeConta.trim().split(/\s+/)[0] || "";
   const shift = (k) => { const d = fromIso(day); d.setDate(d.getDate() + k); setDay(iso(d)); };
 
   return (
@@ -1025,12 +1064,12 @@ export default function Nutri({ metadadosConta }) {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, position: "relative", flexWrap: "wrap", rowGap: 8 }}>
               <button onClick={() => setUserMenu(!userMenu)} style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", padding: 0, flex: "0 0 auto" }}>
                 <div style={{ width: 32, height: 32, borderRadius: 999, background: "var(--coral-s)", color: "var(--coral-d)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, overflow: "hidden", flex: "0 0 auto" }}>
-                  {fotoHeader ? <img src={fotoHeader} alt="Pedro" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "P"}
+                  {fotoHeader ? <img src={fotoHeader} alt={nomeConta} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (nomeConta[0] || "").toUpperCase()}
                 </div>
-                <span style={{ fontSize: 14.5, fontWeight: 700, whiteSpace: "nowrap" }}>Olá, Pedro</span>
+                <span style={{ fontSize: 14.5, fontWeight: 700, whiteSpace: "nowrap" }}>Olá{primeiroNome ? `, ${primeiroNome}` : ""}</span>
               </button>
 
-              <button onClick={() => setModeloOpen(true)} style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--card)", borderRadius: 999, padding: "6px 10px", boxShadow: "0 1px 2px rgba(27,37,89,.06)", flex: "0 0 auto" }}>
+              <button onClick={() => setModeloOpen(true)} style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--card)", borderRadius: 999, padding: "6px 10px", boxShadow: "0 1px 2px rgba(var(--shadow-rgb),.06)", flex: "0 0 auto" }}>
                 <span className="eb" style={{ fontSize: 10 }}>Dieta</span>
                 <span style={{ fontSize: 11.5, fontWeight: 700 }}>{cfg.refeicoesModelos.find((r) => r.id === modeloHojeId)?.nome || "Dieta"}</span>
               </button>
@@ -1044,10 +1083,10 @@ export default function Nutri({ metadadosConta }) {
 
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto", flex: "0 0 auto" }}>
                 <button onClick={() => shift(-1)} aria-label="Dia anterior"
-                  style={{ width: 30, height: 30, borderRadius: 9, background: "var(--card)", color: "var(--ink)", fontSize: 14, fontWeight: 700, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>←</button>
+                  style={{ width: 30, height: 30, borderRadius: 9, background: "var(--card)", color: "var(--ink)", fontSize: 14, fontWeight: 700, boxShadow: "0 1px 2px rgba(var(--shadow-rgb),.06)" }}>←</button>
                 <span style={{ fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{label(day)}</span>
                 <button onClick={() => shift(1)} aria-label="Próximo dia"
-                  style={{ width: 30, height: 30, borderRadius: 9, background: "var(--card)", color: "var(--ink)", fontSize: 14, fontWeight: 700, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>→</button>
+                  style={{ width: 30, height: 30, borderRadius: 9, background: "var(--card)", color: "var(--ink)", fontSize: 14, fontWeight: 700, boxShadow: "0 1px 2px rgba(var(--shadow-rgb),.06)" }}>→</button>
               </div>
 
               {userMenu && (
@@ -1129,11 +1168,11 @@ export default function Nutri({ metadadosConta }) {
           {fabMenu && (
             <div className="fabMenu">
               <button onClick={() => { setFabMenu(false); setVozOpen(true); }}
-                style={{ display: "flex", alignItems: "center", gap: 9, background: "var(--ink)", color: "#fff", borderRadius: 999, padding: "11px 18px 11px 14px", fontSize: 13.5, fontWeight: 600, boxShadow: "0 4px 14px rgba(27,37,89,.3)" }}>
+                style={{ display: "flex", alignItems: "center", gap: 9, background: "var(--ink)", color: "var(--on-ink)", borderRadius: 999, padding: "11px 18px 11px 14px", fontSize: 13.5, fontWeight: 600, boxShadow: "0 4px 14px rgba(var(--shadow-rgb),.3)" }}>
                 <span style={{ fontSize: 17 }}>🎙</span> Falei o que comi
               </button>
               <button onClick={() => { setFabMenu(false); setSheet({ mealId: null }); }}
-                style={{ display: "flex", alignItems: "center", gap: 9, background: "#fff", color: "var(--ink)", borderRadius: 999, padding: "11px 18px 11px 14px", fontSize: 13.5, fontWeight: 600, boxShadow: "0 4px 14px rgba(27,37,89,.18)" }}>
+                style={{ display: "flex", alignItems: "center", gap: 9, background: "var(--surface)", color: "var(--ink)", borderRadius: 999, padding: "11px 18px 11px 14px", fontSize: 13.5, fontWeight: 600, boxShadow: "0 4px 14px rgba(var(--shadow-rgb),.18)" }}>
                 <span style={{ fontSize: 17 }}>✏️</span> Adicionar manualmente
               </button>
             </div>
@@ -1150,6 +1189,15 @@ export default function Nutri({ metadadosConta }) {
         onFotosIndex={(dataChave, angulos) => persist({ ...data, fotosIndex: { ...(data.fotosIndex || {}), [dataChave]: angulos } })}
         onExamesCampos={(campos) => persist({ ...data, examesCampos: campos })}
         onSalvarExame={(dataChave, valores, campos) => persist({ ...data, examesCampos: campos, exames: { ...(data.exames || {}), [dataChave]: { ...(data.exames && data.exames[dataChave]), ...valores } } })}
+        onSalvarExamesLote={(porData, campos, arquivo) => {
+          const exames = { ...(data.exames || {}) };
+          Object.entries(porData).forEach(([d, v]) => { exames[d] = { ...(exames[d] || {}), ...v }; });
+          const idxArq = indiceArquivos(data);
+          persist({ ...data, examesCampos: campos, exames, arquivos: arquivo ? { ...idxArq, itens: [...idxArq.itens, arquivo] } : data.arquivos });
+          const n = Object.keys(porData).length;
+          if (n) flash(n > 1 ? `Exames salvos em ${n} datas` : "Exame salvo");
+          else if (arquivo) flash("Arquivo guardado em Meus arquivos");
+        }}
         onExameContexto={(dataChave, ctx) => persist({ ...data, exameContexto: { ...(data.exameContexto || {}), [dataChave]: ctx } })}
         onSetPesoData={(dt, kg) => persist({ ...data, pesos: { ...(data.pesos || {}), [dt]: kg } })}
         razoes={data.tendenciasRazoes || []}
@@ -1160,7 +1208,7 @@ export default function Nutri({ metadadosConta }) {
       <div className="nav">
         {[["dia", "Diário", I_HOME], ["hist", "Evolução", I_CHART], ["cfg", "Definições", I_GEAR], ["perfil", "Perfil", I_USER]].map(([k, v, d]) => (
           <button key={k} data-on={tab === k ? "1" : "0"} onClick={() => setTab(k)}>
-            <Ico d={d} />{v}
+            <span className="navIco"><Ico d={d} /></span>{v}
           </button>
         ))}
       </div>
@@ -1252,7 +1300,7 @@ export default function Nutri({ metadadosConta }) {
       )}
 
       {toast && (
-        <div style={{ position: "fixed", left: 14, right: 14, bottom: 82, zIndex: 70, background: "var(--ink)", color: "#fff", padding: "13px 14px", borderRadius: 12, fontSize: 13, fontWeight: 600, boxShadow: "0 6px 20px rgba(27,37,89,.28)" }}>
+        <div style={{ position: "fixed", left: 14, right: 14, bottom: 82, zIndex: 70, background: "var(--ink)", color: "var(--on-ink)", padding: "13px 14px", borderRadius: 12, fontSize: 13, fontWeight: 600, boxShadow: "0 6px 20px rgba(var(--shadow-rgb),.28)" }}>
           {toast}
         </div>
       )}
@@ -1274,10 +1322,10 @@ function PainelTopo({ pesos, day, onSetPeso, sono, onSetSono, medLista, medMarca
   const Mini = ({ k, icone, titulo, valor, cor }) => (
     <button onClick={() => setAberto(aberto === k ? null : k)}
       style={{ flex: 1, background: aberto === k ? "var(--ink)" : "var(--card)", borderRadius: 12, padding: compacto ? "7px 2px" : "10px 2px",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: compacto ? 1 : 3, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
+        display: "flex", flexDirection: "column", alignItems: "center", gap: compacto ? 1 : 3, boxShadow: "0 1px 2px rgba(var(--shadow-rgb),.06)" }}>
       {!compacto && <span style={{ fontSize: 17 }}>{icone}</span>}
-      <span style={{ fontSize: 11, fontWeight: 700, color: aberto === k ? "#fff" : "var(--ink)" }}>{titulo}</span>
-      <span style={{ fontSize: 12, fontWeight: 800, color: aberto === k ? "#fff" : (cor || "var(--ink2)") }}>{valor}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: aberto === k ? "var(--on-ink)" : "var(--ink)" }}>{titulo}</span>
+      <span style={{ fontSize: 12, fontWeight: 800, color: aberto === k ? "var(--on-ink)" : (cor || "var(--ink2)") }}>{valor}</span>
     </button>
   );
 
@@ -1738,10 +1786,10 @@ function categorizarExame(nome) {
 }
 
 const CSS_STICKY = `
-.nx .stickyTable{overflow-x:auto;border-radius:12px;background:var(--card);box-shadow:0 1px 2px rgba(27,37,89,.06)}
+.nx .stickyTable{overflow-x:auto;border-radius:12px;background:var(--card);box-shadow:0 1px 2px rgba(var(--shadow-rgb),.06)}
 .nx .stickyTable table{border-collapse:collapse;font-size:11.5px;white-space:nowrap;width:100%}
 .nx .stickyTable th,.nx .stickyTable td{padding:8px 11px;text-align:right;border-bottom:1px solid var(--rule)}
-.nx .stickyTable th:first-child,.nx .stickyTable td:first-child{position:sticky;left:0;background:var(--card);text-align:left;font-weight:600;z-index:2;box-shadow:2px 0 4px rgba(27,37,89,.06)}
+.nx .stickyTable th:first-child,.nx .stickyTable td:first-child{position:sticky;left:0;background:var(--card);text-align:left;font-weight:600;z-index:2;box-shadow:2px 0 4px rgba(var(--shadow-rgb),.06)}
 .nx .stickyTable thead th{background:var(--bg);font-weight:700;color:var(--ink2);font-size:10.5px}
 .nx .stickyTable thead th:first-child{z-index:3}
 .nx .stickyTable .grupo td{background:var(--bg);font-weight:700;color:var(--ink2);font-size:10px;text-transform:uppercase;letter-spacing:.04em;position:static;box-shadow:none}
@@ -1934,7 +1982,7 @@ function LinhaMacros({ tot, cfg, agua, metaAgua, compacto }) {
   const Mini = ({ icone, titulo, valor, meta, cor }) => (
     <button onClick={() => setAberto(!aberto)}
       style={{ flex: 1, background: "var(--card)", borderRadius: 12, padding: compacto ? "7px 2px" : "10px 2px",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: compacto ? 1 : 3, boxShadow: "0 1px 2px rgba(27,37,89,.06)" }}>
+        display: "flex", flexDirection: "column", alignItems: "center", gap: compacto ? 1 : 3, boxShadow: "0 1px 2px rgba(var(--shadow-rgb),.06)" }}>
       {!compacto && <span style={{ fontSize: 17 }}>{icone}</span>}
       <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink)" }}>{titulo}</span>
       <span className="num" style={{ fontSize: 12, fontWeight: 800, color: cor || "var(--ink2)" }}>{fmt(valor)}/{fmt(meta)}</span>
@@ -2313,11 +2361,11 @@ Responda só JSON, sem markdown:
             {meal.nome} ainda não tem meta própria — defina aqui para sugerir com base nela
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 7 }}>
-            {[{ k: "kcal", lb: "kcal", bg: "#fff", txt: "var(--ink)" }, ...MACROS].map((x) => (
+            {[{ k: "kcal", lb: "kcal", bg: "var(--surface)", txt: "var(--ink)" }, ...MACROS].map((x) => (
               <div key={x.k}>
                 <div className="eb" style={{ marginBottom: 4, color: x.txt, fontWeight: 700 }}>{x.lb}</div>
                 <input className="num" inputMode="numeric" placeholder="—"
-                  style={{ padding: "8px 6px", fontSize: 13, background: "#fff", fontWeight: 700, textAlign: "center" }}
+                  style={{ padding: "8px 6px", fontSize: 13, background: "var(--surface)", fontWeight: 700, textAlign: "center" }}
                   value={alvoRasc[x.k]} onChange={(e) => setAlvoRasc({ ...alvoRasc, [x.k]: e.target.value.replace(/\D/g, "") })} />
               </div>
             ))}
@@ -2672,7 +2720,7 @@ function FoodSheet({ data, meal, meals, onClose, onAdd, onFav, onCustom }) {
       {erro && <div className="card" style={{ padding: 13, marginBottom: 11, fontSize: 13, color: "var(--coral-d)", background: "var(--coral-s)" }}>{erro}</div>}
 
       {sel && (
-        <div className="card" style={{ padding: 15, marginBottom: 13, boxShadow: "0 4px 18px rgba(245,56,93,.18)" }}>
+        <div className="card" style={{ padding: 15, marginBottom: 13, boxShadow: "0 4px 18px rgba(var(--coral-rgb,245,56,93),.18)" }}>
           <div className="row" style={{ marginBottom: 10 }}>
             <span style={{ fontSize: 14.5, fontWeight: 700 }}>{sel.nome}</span>
             <button className="mini" onClick={() => setSel(null)}>✕</button>
@@ -2841,7 +2889,7 @@ function FaixaHistorico({ icone, titulo, contagem, aberto, onToggle, children })
   );
 }
 
-function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex, onExamesCampos, onSalvarExame, onExameContexto, onSetPesoData, razoes, onRazoes }) {
+function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex, onExamesCampos, onSalvarExame, onSalvarExamesLote, onExameContexto, onSetPesoData, razoes, onRazoes }) {
   const hojeIso = iso(new Date());
   const [preset, setPreset] = useState("14d");
   const [abertoPeso, setAbertoPeso] = useState(false);
@@ -2899,7 +2947,7 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
   const suppOk = dias.filter((d) => cfg.supps.length && d.supps.length === cfg.supps.length).length;
 
   const cards = [
-    { lb: "Média kcal", v: fmt(md("kcal")), sub: regMeta.length ? `${bateuKcal}/${regMeta.length} dias na faixa da meta` : "sem meta definida no período", bg: "#fff", txt: "var(--ink)" },
+    { lb: "Média kcal", v: fmt(md("kcal")), sub: regMeta.length ? `${bateuKcal}/${regMeta.length} dias na faixa da meta` : "sem meta definida no período", bg: "var(--surface)", txt: "var(--ink)" },
     { lb: "Média proteína", v: `${fmt(md("prot"))} g`, sub: `${reg.length} dias registrados`, bg: "var(--lime-s)", txt: "var(--lime-d)" },
     { lb: "Média carbo", v: `${fmt(md("carb"))} g`, sub: `${reg.length} dias registrados`, bg: "var(--orange-s)", txt: "var(--orange-d)" },
     { lb: "Média gordura", v: `${fmt(md("gord"))} g`, sub: `${reg.length} dias registrados`, bg: "var(--violet-s)", txt: "var(--violet-d)" },
@@ -2992,7 +3040,7 @@ function Historico({ data, cfg, onPick, onSalvarMedicao, onAltura, onFotosIndex,
         <ExamesTabela campos={data.examesCampos || []} exames={data.exames || {}} />
         <div style={{ height: 1, background: "var(--rule)", margin: "16px 0" }} />
         <ExamesPanel campos={data.examesCampos || []} exames={data.exames || {}} contextos={data.exameContexto || {}}
-          onCampos={onExamesCampos} onSalvar={onSalvarExame} onContexto={onExameContexto} />
+          onCampos={onExamesCampos} onSalvar={onSalvarExame} onContexto={onExameContexto} onSalvarLote={onSalvarExamesLote} />
       </FaixaHistorico>
 
       <FaixaHistorico icone="📸" titulo="Evolução de fotografias" contagem={Object.keys(data.fotosIndex || {}).length}
@@ -3050,7 +3098,7 @@ function Tendencias({ dias, ativos, setAtivos, temMedidas, examesCampos, marcado
     if (!active || !payload || !payload.length) return null;
     const raw = payload[0].payload._raw;
     return (
-      <div style={{ background: "var(--ink)", color: "#fff", padding: "9px 11px", borderRadius: 9, fontSize: 11.5 }}>
+      <div style={{ background: "var(--ink)", color: "var(--on-ink)", padding: "9px 11px", borderRadius: 9, fontSize: 11.5 }}>
         <div style={{ fontWeight: 700, marginBottom: 4 }}>{lb}</div>
         {todasSeries.filter((s) => ativos.includes(s.key) && raw[s.key] != null).map((s) => (
           <div key={s.key} style={{ color: s.cor }}>{s.nome}: {n1(raw[s.key])} {s.unidade}</div>
@@ -3076,25 +3124,25 @@ function Tendencias({ dias, ativos, setAtivos, temMedidas, examesCampos, marcado
             onClick={() => toggle(s.key)}>{s.nome}</button>
         ))}
         {temMedidas && (
-          <button className="chip" style={medidasAtivas ? { background: "var(--ink)", color: "#fff", borderColor: "var(--ink)" } : {}}
+          <button className="chip" style={medidasAtivas ? { background: "var(--ink)", color: "var(--on-ink)", borderColor: "var(--ink)" } : {}}
             onClick={() => { setSeletorOpen("medidas"); setFiltro(""); }}>
             📏 medições{medidasAtivas ? ` (${medidasAtivas})` : ""}
           </button>
         )}
         {seriesExames.length > 0 && (
-          <button className="chip" style={examesAtivos ? { background: "var(--ink)", color: "#fff", borderColor: "var(--ink)" } : {}}
+          <button className="chip" style={examesAtivos ? { background: "var(--ink)", color: "var(--on-ink)", borderColor: "var(--ink)" } : {}}
             onClick={() => { setSeletorOpen("exames"); setFiltro(""); }}>
             🧪 exames{examesAtivos ? ` (${examesAtivos})` : ""}
           </button>
         )}
         {seriesMarcadores.length > 0 && (
-          <button className="chip" style={marcadoresAtivos ? { background: "var(--ink)", color: "#fff", borderColor: "var(--ink)" } : {}}
+          <button className="chip" style={marcadoresAtivos ? { background: "var(--ink)", color: "var(--on-ink)", borderColor: "var(--ink)" } : {}}
             onClick={() => { setSeletorOpen("marcadores"); setFiltro(""); }}>
             🧭 marcações{marcadoresAtivos ? ` (${marcadoresAtivos})` : ""}
           </button>
         )}
         {seriesMedicamentos.length > 0 && (
-          <button className="chip" style={medicamentosAtivos ? { background: "var(--ink)", color: "#fff", borderColor: "var(--ink)" } : {}}
+          <button className="chip" style={medicamentosAtivos ? { background: "var(--ink)", color: "var(--on-ink)", borderColor: "var(--ink)" } : {}}
             onClick={() => { setSeletorOpen("medicamentos"); setFiltro(""); }}>
             🧠 medicamentos{medicamentosAtivos ? ` (${medicamentosAtivos})` : ""}
           </button>
@@ -3190,7 +3238,7 @@ function RazoesCard({ seriesMedidas, seriesExames, seriesMarcadores, seriesMedic
           <input placeholder="nome (opcional)" value={nome} onChange={(e) => setNome(e.target.value)} style={{ marginBottom: 8, fontSize: 13 }} />
           <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10 }}>
             <select value={numKey} onChange={(e) => setNumKey(e.target.value)}
-              style={{ flex: 1, padding: "8px 6px", fontSize: 12.5, borderRadius: 10, border: "1.5px solid var(--rule)", background: "#fff" }}>
+              style={{ flex: 1, padding: "8px 6px", fontSize: 12.5, borderRadius: 10, border: "1.5px solid var(--rule)", background: "var(--surface)" }}>
               <option value="">numerador…</option>
               {grupos.map((g) => g.itens.length > 0 && (
                 <optgroup key={g.titulo} label={g.titulo}>
@@ -3200,7 +3248,7 @@ function RazoesCard({ seriesMedidas, seriesExames, seriesMarcadores, seriesMedic
             </select>
             <span className="eb" style={{ fontSize: 16 }}>÷</span>
             <select value={denKey} onChange={(e) => setDenKey(e.target.value)}
-              style={{ flex: 1, padding: "8px 6px", fontSize: 12.5, borderRadius: 10, border: "1.5px solid var(--rule)", background: "#fff" }}>
+              style={{ flex: 1, padding: "8px 6px", fontSize: 12.5, borderRadius: 10, border: "1.5px solid var(--rule)", background: "var(--surface)" }}>
               <option value="">denominador…</option>
               {grupos.map((g) => g.itens.length > 0 && (
                 <optgroup key={g.titulo} label={g.titulo}>
@@ -3562,7 +3610,10 @@ function acharOuCriarCampo(campos, nome, unidade) {
   return { campos: [...campos, { key, nome, unidade: unidade || "" }], key };
 }
 
-function ExamesPanel({ campos, exames, contextos, onCampos, onSalvar, onContexto }) {
+function ExamesPanel({ campos, exames, contextos, onCampos, onSalvar, onContexto, onSalvarLote }) {
+  const [progresso, setProgresso] = useState("");
+  const [arquivoPendente, setArquivoPendente] = useState(null);
+  const [salvando, setSalvando] = useState(false);
   const [formAberto, setFormAberto] = useState(false);
   const [modo, setModo] = useState("lista");
   const [dataForm, setDataForm] = useState(iso(new Date()));
@@ -3595,62 +3646,54 @@ function ExamesPanel({ campos, exames, contextos, onCampos, onSalvar, onContexto
   const datas = Object.keys(exames).sort().reverse();
 
   async function processarArquivo(file) {
-    if (file.size > 4 * 1024 * 1024) {
-      setErro("Esse arquivo tem mais de 4MB — a função do servidor não aceita arquivos tão grandes. Se for um PDF escaneado (fotos das páginas), tente exportar como PDF de texto, ou envie só as páginas de resultado em vez do laudo inteiro.");
-      return;
-    }
-    setProc(true); setErro("");
+    setProc(true); setErro(""); setArquivoPendente(null); setProgresso("");
     try {
-      const b64 = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file);
+      const { grupos, falhas } = await lerLaudo(file, {
+        nomesCatalogo: campos.map((c) => c.nome), dataPadrao: dataForm, onProgresso: setProgresso,
       });
-      const isPdf = file.type === "application/pdf";
-      const bloco = isPdf
-        ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }
-        : { type: "image", source: { type: "base64", media_type: file.type === "image/png" ? "image/png" : "image/jpeg", data: b64 } };
-      const resp = await fetch("/api/claude", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-5", max_tokens: 8000,
-          messages: [{ role: "user", content: [bloco, {
-            type: "text", text: `Este documento é um laudo de exames laboratoriais brasileiro — pode ter várias páginas e várias seções diferentes (hematologia, bioquímica, hormônios, urina, etc). Percorra o documento INTEIRO, do início ao fim, sem pular nenhuma página nem nenhuma seção, mesmo que sejam muitas.
-
-Extraia TODOS os resultados numéricos medidos (não deixe nenhum de fora). Para cada um:
-- Ignore faixas de referência, texto explicativo, dados do paciente/laboratório e assinaturas — só o valor medido de cada exame.
-- Nomeie o exame de forma reconhecível (ex.: "Hemoglobina", "Colesterol Total", "TSH", "Testosterona Total") — se houver sigla e nome por extenso, prefira o nome por extenso.
-- Números no documento costumam usar vírgula como separador decimal (ex.: "15,9") — converta corretamente para o formato numérico do JSON (15.9), nunca deixe a vírgula no valor.
-- Para resultados como "Inferior a X" ou "< X" (abaixo do limite de detecção), use o valor X.
-- Se o mesmo exame aparecer mais de uma vez no documento (ex.: repetido em página de resumo), inclua só uma vez, com o valor mais completo/confiável.
-- Não invente exames que não estão no documento, e não pule nenhum que esteja.
-
-Responda APENAS com um JSON compacto, sem markdown, sem comentários, sem texto antes ou depois — "n" é o nome do exame, "v" é o valor numérico, "u" é a unidade tal como aparece no documento:
-[{"n":"Hemoglobina","v":15.9,"u":"g/dL"},{"n":"Glicose","v":87,"u":"mg/dL"}]` }] }],
-        }),
-      });
-      const j = await resp.json();
-      const raw = (j.content || []).map((c) => c.text || "").join("").replace(/```json|```/g, "").trim();
-      const arr = JSON.parse(raw.slice(raw.indexOf("["), raw.lastIndexOf("]") + 1));
-      if (!arr.length) throw new Error();
-      setRevisao(arr.map((x) => ({ nome: x.n, valor: String(x.v), unidade: x.u || "" })));
+      if (!grupos.length) throw new Error("Nenhum resultado encontrado no arquivo.");
+      setRevisao(grupos);
+      setArquivoPendente(file);
       setModo("revisar");
-    } catch {
-      setErro("Não consegui ler os índices deste arquivo — pode ser um documento grande demais ou digitalização de baixa qualidade. Tente de novo, ou envie um PDF só com as páginas de resultado (sem capa), ou adicione manualmente abaixo.");
+      if (falhas.length) setErro(`Não consegui ler ${falhas.join(", ")} — confira se falta algum índice e adicione manualmente depois.`);
+    } catch (e) {
+      setArquivoPendente(file);
+      setErro(`Não consegui ler os índices deste arquivo${e && e.message ? ` (${e.message})` : ""}. Você pode tentar de novo, fotografar as páginas, adicionar manualmente — ou só guardar o arquivo em Meus arquivos.`);
     }
-    setProc(false);
+    setProc(false); setProgresso("");
   }
 
-  function salvarRevisao() {
+  async function guardarArquivo(file, datas) {
+    try { return await enviarArquivo(file, PASTA_EXAMES, { exameDatas: datas }); }
+    catch { return null; }
+  }
+
+  async function salvarRevisao() {
+    setSalvando(true);
     let camposAtual = campos;
-    const valores = {};
-    revisao.forEach((r) => {
-      if (!r.nome.trim() || r.valor === "") return;
-      const { campos: c2, key } = acharOuCriarCampo(camposAtual, r.nome.trim(), r.unidade);
-      camposAtual = c2;
-      valores[key] = Number(r.valor);
+    const porData = {};
+    revisao.forEach((g) => {
+      if (!g.data) return;
+      g.itens.forEach((r) => {
+        if (!r.nome.trim() || r.valor === "" || !Number.isFinite(Number(r.valor))) return;
+        const { campos: c2, key } = acharOuCriarCampo(camposAtual, r.nome.trim(), r.unidade);
+        camposAtual = c2;
+        porData[g.data] = { ...(porData[g.data] || {}), [key]: Number(r.valor) };
+      });
     });
-    onSalvar(dataForm, valores, camposAtual);
-    setRevisao(null); setModo("lista"); setFormAberto(false);
+    const item = arquivoPendente ? await guardarArquivo(arquivoPendente, Object.keys(porData).sort()) : null;
+    onSalvarLote(porData, camposAtual, item);
+    setSalvando(false);
+    if (arquivoPendente && !item) setErro("Os índices foram salvos, mas não consegui guardar o arquivo em Meus arquivos (confira o supabase/storage.sql).");
+    setRevisao(null); setArquivoPendente(null); setModo("lista"); setFormAberto(false);
+  }
+
+  async function soGuardarArquivo() {
+    setSalvando(true);
+    const item = await guardarArquivo(arquivoPendente, []);
+    setSalvando(false);
+    if (item) { onSalvarLote({}, campos, item); setArquivoPendente(null); setErro(""); setFormAberto(false); }
+    else setErro("Não consegui guardar o arquivo agora (confira o supabase/storage.sql).");
   }
 
   function adicionarManual() {
@@ -3686,7 +3729,7 @@ Responda APENAS com um JSON compacto, sem markdown, sem comentários, sem texto 
             <div className="eb" style={{ marginBottom: 4 }}>Dose de testosterona (mg)</div>
             <input className="num" inputMode="decimal" placeholder="ex.: 125" value={ctx.dose}
               onChange={(e) => salvarCtx({ dose: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })}
-              style={{ marginBottom: 12, background: "#fff" }} />
+              style={{ marginBottom: 12, background: "var(--surface)" }} />
 
             <div className="eb" style={{ marginBottom: 5 }}>Anastrozol — a cada quantos dias</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 9, flexWrap: "wrap" }}>
@@ -3696,27 +3739,33 @@ Responda APENAS com um JSON compacto, sem markdown, sem comentários, sem texto 
               ))}
               <input className="num" inputMode="numeric" placeholder="outro" value={["5", "7", "10"].includes(ctx.anaPeriodicidade) ? "" : ctx.anaPeriodicidade}
                 onChange={(e) => salvarCtx({ anaPeriodicidade: e.target.value.replace(/\D/g, "") })}
-                style={{ width: 72, background: "#fff", fontSize: 12.5 }} />
+                style={{ width: 72, background: "var(--surface)", fontSize: 12.5 }} />
             </div>
             <div className="eb" style={{ marginBottom: 4 }}>Última dose de anastrozol</div>
-            <input type="date" value={ctx.anaUltima} onChange={(e) => salvarCtx({ anaUltima: e.target.value })} style={{ background: "#fff" }} />
+            <input type="date" value={ctx.anaUltima} onChange={(e) => salvarCtx({ anaUltima: e.target.value })} style={{ background: "var(--surface)" }} />
           </div>
 
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
             <label className="cta" style={{ flex: 1, display: "block", textAlign: "center", opacity: proc ? .6 : 1 }}>
-              {proc ? "lendo…" : "Anexar PDF"}
-              <input type="file" accept="application/pdf" style={{ display: "none" }}
-                onChange={(e) => e.target.files && e.target.files[0] && processarArquivo(e.target.files[0])} />
+              {proc ? (progresso || "lendo…") : "Anexar PDF"}
+              <input type="file" accept="application/pdf" style={{ display: "none" }} disabled={proc}
+                onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) processarArquivo(f); }} />
             </label>
             <label className="cta" style={{ flex: 1, display: "block", textAlign: "center", opacity: proc ? .6 : 1 }}>
-              {proc ? "lendo…" : "Fotografar exame"}
-              <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
-                onChange={(e) => e.target.files && e.target.files[0] && processarArquivo(e.target.files[0])} />
+              {proc ? "aguarde…" : "Fotografar exame"}
+              <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} disabled={proc}
+                onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) processarArquivo(f); }} />
             </label>
           </div>
           <div className="eb" style={{ marginBottom: 10, lineHeight: 1.5 }}>Se o botão não abrir nada ao tocar, o navegador pode estar bloqueando a seleção de arquivo neste ambiente — nesse caso, use "+ adicionar índice manualmente" abaixo.</div>
           <button className="ghost" style={{ width: "100%", marginBottom: 10 }} onClick={() => setModo("manual")}>+ adicionar índice manualmente</button>
+          <div className="eb" style={{ marginBottom: 10, lineHeight: 1.5 }}>Laudos longos são lidos em partes, e quadros comparativos (várias datas no mesmo arquivo) viram um registro para cada data.</div>
           {erro && <div className="card" style={{ padding: 11, marginBottom: 10, fontSize: 12, color: "var(--coral-d)", background: "var(--coral-s)" }}>{erro}</div>}
+          {erro && arquivoPendente && modo === "lista" && (
+            <button className="ghost" style={{ width: "100%", marginBottom: 10 }} disabled={salvando} onClick={soGuardarArquivo}>
+              {salvando ? "guardando…" : "📁 Só guardar o arquivo em Meus arquivos"}
+            </button>
+          )}
         </>
       )}
 
@@ -3750,28 +3799,49 @@ Responda APENAS com um JSON compacto, sem markdown, sem comentários, sem texto 
         </div>
       )}
 
-          {modo === "revisar" && revisao && (
-            <>
-              <div className="eb" style={{ marginBottom: 9, fontWeight: 700 }}>Confira antes de salvar — {revisao.length} índices encontrados</div>
-              <div className="card" style={{ padding: "4px 13px 10px", marginBottom: 12, maxHeight: 360, overflowY: "auto" }}>
-                {revisao.map((r, i) => (
-                  <div key={i} className="item" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <input value={r.nome} style={{ flex: 1, padding: "6px 8px", fontSize: 12.5 }}
-                      onChange={(e) => setRevisao(revisao.map((z, k) => (k === i ? { ...z, nome: e.target.value } : z)))} />
-                    <input className="num" inputMode="decimal" value={r.valor} style={{ width: 66, padding: "6px 6px", fontSize: 12.5, textAlign: "right" }}
-                      onChange={(e) => setRevisao(revisao.map((z, k) => (k === i ? { ...z, valor: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") } : z)))} />
-                    <input value={r.unidade} style={{ width: 58, padding: "6px 6px", fontSize: 11.5 }}
-                      onChange={(e) => setRevisao(revisao.map((z, k) => (k === i ? { ...z, unidade: e.target.value } : z)))} />
-                    <button className="mini" onClick={() => setRevisao(revisao.filter((_, k) => k !== i))}>✕</button>
-                  </div>
-                ))}
+      {modo === "revisar" && revisao && (() => {
+        const total = revisao.reduce((t, g) => t + g.itens.length, 0);
+        const setGrupo = (gi, patch) => setRevisao(revisao.map((g, k) => (k === gi ? { ...g, ...patch } : g)));
+        const setItem = (gi, i, patch) => setGrupo(gi, { itens: revisao[gi].itens.map((z, k) => (k === i ? { ...z, ...patch } : z)) });
+        return (
+          <>
+            <div className="eb" style={{ marginBottom: 9, fontWeight: 700 }}>
+              Confira antes de salvar — {total} índices{revisao.length > 1 ? ` em ${revisao.length} datas` : ""}
+            </div>
+            {erro && <div className="card" style={{ padding: 11, marginBottom: 10, fontSize: 12, color: "var(--coral-d)", background: "var(--coral-s)" }}>{erro}</div>}
+            {revisao.map((g, gi) => (
+              <div key={gi} className="card" style={{ padding: "10px 13px", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span className="eb" style={{ fontWeight: 700 }}>Coleta</span>
+                  <input type="date" value={g.data || ""} onChange={(e) => setGrupo(gi, { data: e.target.value })}
+                    style={{ flex: 1, padding: "6px 8px", fontSize: 13 }} />
+                  <span className="pill" style={{ background: "var(--violet-s)", color: "var(--violet-d)" }}>{g.itens.length}</span>
+                  {revisao.length > 1 && <button className="mini" aria-label="Descartar esta data" onClick={() => setRevisao(revisao.filter((_, k) => k !== gi))}>✕</button>}
+                </div>
+                {g.data && exames[g.data] && <div className="eb" style={{ color: "var(--orange-d)", marginBottom: 4 }}>Já existe exame nesta data — os valores serão somados/atualizados.</div>}
+                <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                  {g.itens.map((r, i) => (
+                    <div key={i} className="item" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <input value={r.nome} style={{ flex: 1, minWidth: 0, padding: "6px 8px", fontSize: 12.5 }} onChange={(e) => setItem(gi, i, { nome: e.target.value })} />
+                      <input className="num" inputMode="decimal" value={r.valor} style={{ width: 66, padding: "6px 6px", fontSize: 12.5, textAlign: "right" }}
+                        onChange={(e) => setItem(gi, i, { valor: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
+                      <input value={r.unidade} style={{ width: 58, padding: "6px 6px", fontSize: 11.5 }} onChange={(e) => setItem(gi, i, { unidade: e.target.value })} />
+                      <button className="mini" onClick={() => setGrupo(gi, { itens: g.itens.filter((_, k) => k !== i) })}>✕</button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="cta" onClick={salvarRevisao}>Salvar {revisao.length} índices em {label(dataForm)}</button>
-                <button className="ghost" onClick={() => { setRevisao(null); setModo("lista"); }}>cancelar</button>
-              </div>
-            </>
-          )}
+            ))}
+            {arquivoPendente && <div className="eb" style={{ marginBottom: 9 }}>📁 O arquivo também será guardado em Perfil → Meus arquivos → Exames de sangue.</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="cta" disabled={salvando || revisao.some((g) => !g.data)} onClick={salvarRevisao}>
+                {salvando ? "salvando…" : `Salvar ${total} índices`}
+              </button>
+              <button className="ghost" onClick={() => { setRevisao(null); setArquivoPendente(null); setErro(""); setModo("lista"); }}>cancelar</button>
+            </div>
+          </>
+        );
+      })()}
 
       {verData && (
         <div className="sheet">
@@ -3815,6 +3885,82 @@ Responda APENAS com um JSON compacto, sem markdown, sem comentários, sem texto 
   );
 }
 
+/* ---------- instalar o app (PWA) ---------- */
+function InstalarApp() {
+  const [aberto, setAberto] = useState(false);
+  const [prompt, setPrompt] = useState(() => (typeof window !== "undefined" ? window.__pwaPrompt : null));
+  const [instalado, setInstalado] = useState(() =>
+    typeof window !== "undefined" && (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true));
+  useEffect(() => {
+    const pegou = () => setPrompt(window.__pwaPrompt);
+    const ok = () => { setInstalado(true); setPrompt(null); };
+    window.addEventListener("pwa-prompt", pegou);
+    window.addEventListener("appinstalled", ok);
+    return () => { window.removeEventListener("pwa-prompt", pegou); window.removeEventListener("appinstalled", ok); };
+  }, []);
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const ios = /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  const android = /android/i.test(ua);
+  const dentroDeOutroApp = /FBAN|FBAV|Instagram|Line\/|LinkedInApp|GSA\/|; wv\)/i.test(ua);
+  const samsung = /SamsungBrowser/i.test(ua);
+
+  async function instalar() {
+    if (!prompt) return;
+    prompt.prompt();
+    try { const r = await prompt.userChoice; if (r && r.outcome === "accepted") setInstalado(true); } catch { /* ignora */ }
+    window.__pwaPrompt = null; setPrompt(null);
+  }
+
+  return (
+    <div className="strip" style={{ marginBottom: 11 }}>
+      <button className="stripBtn" onClick={() => setAberto(!aberto)}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 14 }}>📲</span>
+          <span style={{ fontSize: 13.5, fontWeight: 600 }}>Instalar o app</span>
+          {instalado && <span className="pill" style={{ background: "var(--lime-s)", color: "var(--lime-d)" }}>instalado</span>}
+        </div>
+        <span style={{ color: "var(--ink3)", fontSize: 12 }}>{aberto ? "▲" : "▼"}</span>
+      </button>
+      {aberto && (
+        <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.55 }}>
+          {instalado ? (
+            <div>O MyFitPath já está instalado e aberto como app neste aparelho. ✓</div>
+          ) : dentroDeOutroApp ? (
+            <div className="card" style={{ padding: 11, background: "var(--orange-s)", color: "var(--orange-d)" }}>
+              Você abriu o link dentro de outro aplicativo (Instagram, Gmail, etc.), e esse navegador interno não permite instalar apps.
+              Toque em ⋮ ou no ícone de compartilhar e escolha <b>Abrir no {ios ? "Safari" : "Chrome"}</b>; depois volte aqui.
+            </div>
+          ) : prompt ? (
+            <>
+              <button className="cta" onClick={instalar}>Instalar MyFitPath</button>
+              <div className="eb" style={{ marginTop: 8 }}>Ele vai para a tela inicial e abre em tela cheia, como um app.</div>
+            </>
+          ) : ios ? (
+            <ol style={{ margin: 0, paddingLeft: 18 }}>
+              <li>Abra este site no <b>Safari</b>.</li>
+              <li>Toque no botão <b>Compartilhar</b> (quadrado com a seta para cima).</li>
+              <li>Escolha <b>Adicionar à Tela de Início</b> e confirme.</li>
+            </ol>
+          ) : android ? (
+            <>
+              <ol style={{ margin: "0 0 10px", paddingLeft: 18 }}>
+                <li>Abra este site no <b>{samsung ? "Samsung Internet ou no Chrome" : "Chrome"}</b> (fora de aba anônima).</li>
+                <li>Toque no menu <b>⋮</b> e escolha <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</li>
+              </ol>
+              <div className="eb" style={{ lineHeight: 1.5 }}>
+                Se o celular disser que a instalação não é permitida, normalmente é: aba anônima, perfil de trabalho/controle parental,
+                ou a opção "Adicionar atalhos à tela inicial" desativada nas configurações do app Chrome.
+              </div>
+            </>
+          ) : (
+            <div>No computador, use o ícone de instalar na barra de endereço do Chrome ou Edge.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------- perfil ---------- */
 function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
   const [foto, setFoto] = useState(null);
@@ -3832,6 +3978,9 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
   const [abertoPesoP, setAbertoPesoP] = useState(false);
   const [abertoFotosP, setAbertoFotosP] = useState(false);
   const [abertoDados, setAbertoDados] = useState(false);
+  const [abertoTema, setAbertoTema] = useState(false);
+  const [dialogo, setDialogo] = useState(null); // { etapa: "confirmar" | "apagando" | "refazer", sair }
+  const nomeConta = (data.perfilConta && data.perfilConta.nome) || "";
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: d }) => setEmail(d?.user?.email || ""));
@@ -3953,19 +4102,32 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
     flash("Dados de exemplo adicionados — veja no Histórico");
   }
 
-  async function excluirDados(sair) {
-    const ok = window.confirm(
-      sair
-        ? "Isso vai apagar TODOS os seus dados (refeições, medições, exames, fotos, tudo) de forma definitiva e sem volta, e depois vai te desconectar. Seu login continua existindo — na próxima vez que entrar, começa do zero. Tem certeza que quer continuar?"
-        : "Isso vai apagar TODOS os seus dados (refeições, medições, exames, fotos, tudo) de forma definitiva e sem volta. Você continua logado, só que com tudo vazio, como se fosse a primeira vez. Tem certeza que quer continuar?"
-    );
-    if (!ok) return;
-    const { data: u } = await supabase.auth.getUser();
-    if (!u?.user) return;
-    await supabase.from("kv_store").delete().eq("user_id", u.user.id);
-    if (sair) await supabase.auth.signOut();
-    else window.location.reload();
+  function excluirDados(sair) { setDialogo({ etapa: "confirmar", sair }); }
+
+  async function apagarTudo() {
+    const sair = dialogo.sair;
+    setDialogo({ etapa: "apagando", sair });
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u?.user) throw new Error();
+      try { await removerArquivosStorage(indiceArquivos(data).itens.map((i) => i.path)); } catch { /* segue */ }
+      const { error } = await supabase.from("kv_store").delete().eq("user_id", u.user.id);
+      if (error) throw error;
+      setDialogo({ etapa: "refazer", sair });
+    } catch {
+      setDialogo(null);
+      flash("Não foi possível apagar os dados agora.");
+    }
   }
+
+  async function concluirExclusao(refazer) {
+    const sair = dialogo.sair;
+    const base = { config: CONFIG_PADRAO, tema: data.tema || "claro" };
+    try { await window.storage.set(KEY, JSON.stringify(refazer ? { ...base, refazerOnboarding: true } : base)); } catch { /* segue */ }
+    if (sair) await supabase.auth.signOut();
+    window.location.reload();
+  }
+
 
   return (
     <>
@@ -3978,7 +4140,7 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <label style={{ display: "block", cursor: "pointer", flex: "0 0 auto", position: "relative" }}>
             <div style={{ width: 100, height: 100, borderRadius: 999, background: "var(--coral-s)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", border: "2px solid var(--rule)" }}>
-              {!carregando && foto ? <img src={foto} alt="Perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 32, fontWeight: 800, color: "var(--coral-d)" }}>P</span>}
+              {!carregando && foto ? <img src={foto} alt="Perfil" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 32, fontWeight: 800, color: "var(--coral-d)" }}>{(nomeConta[0] || "?").toUpperCase()}</span>}
             </div>
             <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => e.target.files && e.target.files[0] && trocarFoto(e.target.files[0])} />
             <span style={{ position: "absolute", left: "50%", bottom: 8, transform: "translateX(-50%)", background: "var(--coral)", color: "#fff", fontWeight: 700, fontSize: 10.5, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>
@@ -3986,7 +4148,7 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
             </span>
           </label>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Pedro Hungria</div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>{nomeConta || "Sem nome"}</div>
             <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 7 }}>
               <span className="eb" style={{ whiteSpace: "nowrap" }}>altura</span>
               {editandoAltura ? (
@@ -4082,13 +4244,15 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
       </div>
 
       <div className="strip" style={{ marginBottom: 11 }}>
-        <div className="stripBtn" style={{ cursor: "default" }}>
+        <button className="stripBtn" onClick={() => setAbertoTema(!abertoTema)}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 14 }}>🎨</span>
             <span style={{ fontSize: 13.5, fontWeight: 600 }}>Tema</span>
+            <span className="pill" style={{ background: "var(--rule)", color: "var(--ink2)", textTransform: "capitalize" }}>{data.tema || "claro"}</span>
           </div>
-        </div>
-        <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <span style={{ color: "var(--ink3)", fontSize: 12 }}>{abertoTema ? "▲" : "▼"}</span>
+        </button>
+        {abertoTema && <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {[
             { k: "claro", lb: "Claro", bg: "#F5F6FA", cor: "#F5385D" },
             { k: "escuro", lb: "Escuro", bg: "#12141F", cor: "#FF5577" },
@@ -4096,15 +4260,19 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
             { k: "feminino", lb: "Feminino", bg: "#FFF6F8", cor: "#FF7AA2" },
           ].map((t) => (
             <button key={t.k} onClick={() => persist({ ...data, tema: t.k })}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 12, border: `1.5px solid ${(data.tema || "claro") === t.k ? "var(--violet)" : "var(--rule)"}`, background: (data.tema || "claro") === t.k ? "var(--violet-s)" : "#fff" }}>
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 12, border: `1.5px solid ${(data.tema || "claro") === t.k ? "var(--violet)" : "var(--rule)"}`, background: (data.tema || "claro") === t.k ? "var(--violet-s)" : "var(--surface)" }}>
               <span style={{ width: 20, height: 20, borderRadius: 999, background: t.bg, border: "1.5px solid var(--rule)", flex: "0 0 auto", position: "relative", overflow: "hidden" }}>
                 <span style={{ position: "absolute", inset: 0, background: t.cor, clipPath: "polygon(0 0, 100% 0, 0 100%)" }} />
               </span>
-              <span style={{ fontSize: 12.5, fontWeight: 700 }}>{t.lb}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink)" }}>{t.lb}</span>
             </button>
           ))}
-        </div>
+        </div>}
       </div>
+
+      <MeusArquivos data={data} persist={persist} flash={flash} />
+
+      <InstalarApp />
 
       <div className="strip">
         <button className="stripBtn" onClick={() => setAbertoDados(!abertoDados)}>
@@ -4130,7 +4298,7 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
               onClick={() => excluirDados(false)}>
               Excluir meus dados
             </button>
-            <button className="ghost" style={{ width: "100%", padding: 13, color: "#fff", background: "var(--coral-d)", borderColor: "var(--coral-d)", fontWeight: 700 }}
+            <button className="ghost" style={{ width: "100%", padding: 13, color: "#fff", background: "var(--coral)", borderColor: "var(--coral)", fontWeight: 700 }}
               onClick={() => excluirDados(true)}>
               Excluir meus dados e sair
             </button>
@@ -4147,6 +4315,36 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
           </div>
         </div>
       </div>
+
+      {dialogo && (
+        <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "var(--card)", color: "var(--ink)", borderRadius: 18, padding: 20, maxWidth: 360, width: "100%", border: "1px solid var(--rule)" }}>
+            {dialogo.etapa === "confirmar" && (
+              <>
+                <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 8 }}>Apagar todos os seus dados?</div>
+                <div style={{ fontSize: 13, color: "var(--ink2)", lineHeight: 1.55, marginBottom: 16 }}>
+                  Refeições, medições, exames, fotos e arquivos serão apagados de forma definitiva.
+                  {dialogo.sair ? " Depois você será desconectado." : " Você continua logado."} Seu login continua existindo.
+                </div>
+                <button className="cta" style={{ background: "var(--coral)", marginBottom: 8 }} onClick={apagarTudo}>Sim, apagar tudo</button>
+                <button className="ghost" style={{ width: "100%", padding: 12 }} onClick={() => setDialogo(null)}>Cancelar</button>
+              </>
+            )}
+            {dialogo.etapa === "apagando" && <div style={{ fontSize: 14, fontWeight: 600, textAlign: "center", padding: 10 }}>Apagando seus dados…</div>}
+            {dialogo.etapa === "refazer" && (
+              <>
+                <div style={{ fontSize: 30, marginBottom: 6 }}>🧭</div>
+                <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 8 }}>Dados apagados</div>
+                <div style={{ fontSize: 13, color: "var(--ink2)", lineHeight: 1.55, marginBottom: 16 }}>
+                  Gostaria de fazer uma nova avaliação inicial? Ela recalcula suas metas e monta uma nova dieta padrão{dialogo.sair ? " na próxima vez que você entrar" : ""}.
+                </div>
+                <button className="cta" style={{ marginBottom: 8 }} onClick={() => concluirExclusao(true)}>Sim, fazer nova avaliação</button>
+                <button className="ghost" style={{ width: "100%", padding: 12 }} onClick={() => concluirExclusao(false)}>Agora não</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {verFotos && (
         <VisualizarFotos data={verFotos} angulos={(data.fotosIndex || {})[verFotos] || []} onClose={() => setVerFotos(null)}
