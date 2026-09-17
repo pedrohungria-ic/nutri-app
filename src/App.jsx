@@ -364,6 +364,30 @@ const CSS = `
 background:var(--bg);color:var(--ink);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
 min-height:100%;padding:14px 14px 88px;-webkit-font-smoothing:antialiased;position:relative;letter-spacing:-.01em}
 .nx{max-width:480px;margin:0 auto}
+.nx[data-tema="escuro"]{
+--bg:#12141F;--card:#1B1E2E;--ink:#F1F3FA;--ink2:#9AA3C4;--ink3:#6B7394;--rule:#2A2E42;
+--coral:#FF5577;--coral-d:#FF8FA8;--coral-s:#3A1620;
+--lime:#6FDE7C;--lime-d:#9CEDA6;--lime-s:#142A18;
+--orange:#FFB84D;--orange-d:#FFD08A;--orange-s:#2E2210;
+--violet:#9C87FF;--violet-d:#C3B6FF;--violet-s:#241E45;
+--blue:#5CB6F0;--blue-d:#9AD4F5;--blue-s:#122232;
+background:var(--bg);color:var(--ink)}
+.nx[data-tema="hardcore"]{
+--bg:#0A0A0A;--card:#171717;--ink:#FFFFFF;--ink2:#A0A0A0;--ink3:#6B6B6B;--rule:#2B2B2B;
+--coral:#FF1F3D;--coral-d:#FF6B7F;--coral-s:#2E0A0E;
+--lime:#39FF6A;--lime-d:#8CFFA8;--lime-s:#0A2410;
+--orange:#FF8A00;--orange-d:#FFB347;--orange-s:#2E1800;
+--violet:#B026FF;--violet-d:#D580FF;--violet-s:#20082E;
+--blue:#00C2FF;--blue-d:#7FE0FF;--blue-s:#001E2E;
+background:var(--bg);color:var(--ink)}
+.nx[data-tema="feminino"]{
+--bg:#FFF6F8;--card:#FFFFFF;--ink:#5A3B49;--ink2:#B98C9B;--ink3:#D9B8C4;--rule:#F6DCE4;
+--coral:#FF7AA2;--coral-d:#E4547E;--coral-s:#FFE3EC;
+--lime:#8FD9B6;--lime-d:#4FA97C;--lime-s:#E4F7EE;
+--orange:#FFC98A;--orange-d:#E29A3F;--orange-s:#FFF1DE;
+--violet:#C9A6FF;--violet-d:#9A6FE0;--violet-s:#F1E7FF;
+--blue:#8FCBEE;--blue-d:#4E9BC7;--blue-s:#EAF6FD;
+background:var(--bg);color:var(--ink)}
 @media (min-width:540px){
   .nx{box-shadow:0 0 0 1px var(--rule),0 12px 40px rgba(27,37,89,.08);min-height:100vh}
   body{background:#E4E7EF}
@@ -600,7 +624,11 @@ function Onboarding({ metadadosConta, onSalvar }) {
   }
 
   if (PASSOS[passo] === "foto") {
-    const avatares = ["🦁", "🐯", "🦊", "🐼", "🐸", "🦉", "🐺", "🦄"];
+    const gruposAvatar = [
+      { titulo: "💪 Viciado em academia", opcoes: ["🦍", "🔥", "🏋️"] },
+      { titulo: "🌱 Quero começar", opcoes: ["🌱", "🚶", "🎯"] },
+      { titulo: "🛋️ Sedentário, deixa a vida me levar", opcoes: ["🛋️", "🍕", "😴"] },
+    ];
     return wrap(`${d.nome ? d.nome.split(" ")[0] + ", quer" : "Quer"} colocar uma foto?`, "Fica mais fácil reconhecer seu progresso depois. Se preferir, escolhe um avatar.", (
       <>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
@@ -613,14 +641,19 @@ function Onboarding({ metadadosConta, onSalvar }) {
             <div className="eb" style={{ color: "var(--coral-d)", fontWeight: 700 }}>{d.fotoData ? "trocar / reposicionar" : "enviar uma foto"}</div>
           </label>
         </div>
-        <div className="eb" style={{ marginBottom: 8, fontWeight: 700 }}>Ou escolha um avatar</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
-          {avatares.map((a) => (
-            <button key={a} className="chip" data-on={d.avatarEscolhido === a && !d.fotoData ? "1" : "0"}
-              style={{ flex: "0 1 44px", fontSize: 19, padding: "8px 0" }}
-              onClick={() => set({ avatarEscolhido: a, fotoData: "" })}>{a}</button>
-          ))}
-        </div>
+        <div className="eb" style={{ marginBottom: 10, fontWeight: 700 }}>Ou escolha um avatar — qual te descreve hoje?</div>
+        {gruposAvatar.map((grupo) => (
+          <div key={grupo.titulo} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{grupo.titulo}</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {grupo.opcoes.map((a) => (
+                <button key={a} className="chip" data-on={d.avatarEscolhido === a && !d.fotoData ? "1" : "0"}
+                  style={{ flex: 1, fontSize: 22, padding: "10px 0" }}
+                  onClick={() => set({ avatarEscolhido: a, fotoData: "" })}>{a}</button>
+              ))}
+            </div>
+          </div>
+        ))}
 
         {d.editandoFoto && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(27,37,89,.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 80, padding: 20 }}>
@@ -965,7 +998,7 @@ export default function Nutri({ metadadosConta }) {
 
   if (!data.perfilConta) {
     return (
-      <div className="nx"><style>{CSS}</style><style>{CSS_STICKY}</style>
+      <div className="nx" data-tema={data.tema || "claro"}><style>{CSS}</style><style>{CSS_STICKY}</style>
         <Onboarding metadadosConta={metadadosConta} onSalvar={(perfil) => {
           const hoje = iso(new Date());
           if (perfil.fotoData) window.storage.set("foto:perfil", perfil.fotoData).catch(() => {});
@@ -984,7 +1017,7 @@ export default function Nutri({ metadadosConta }) {
   const shift = (k) => { const d = fromIso(day); d.setDate(d.getDate() + k); setDay(iso(d)); };
 
   return (
-    <div className="nx">
+    <div className="nx" data-tema={data.tema || "claro"}>
       <style>{CSS}</style><style>{CSS_STICKY}</style>
 
       {tab === "dia" && (
@@ -3920,13 +3953,18 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
     flash("Dados de exemplo adicionados — veja no Histórico");
   }
 
-  async function excluirConta() {
-    const ok = window.confirm("Isso vai apagar TODOS os seus dados (refeições, medições, exames, fotos, tudo) de forma definitiva e sem volta. Isso NÃO exclui sua conta — seu login continua funcionando normalmente, só que com tudo vazio, como se fosse a primeira vez. Tem certeza que quer continuar?");
+  async function excluirDados(sair) {
+    const ok = window.confirm(
+      sair
+        ? "Isso vai apagar TODOS os seus dados (refeições, medições, exames, fotos, tudo) de forma definitiva e sem volta, e depois vai te desconectar. Seu login continua existindo — na próxima vez que entrar, começa do zero. Tem certeza que quer continuar?"
+        : "Isso vai apagar TODOS os seus dados (refeições, medições, exames, fotos, tudo) de forma definitiva e sem volta. Você continua logado, só que com tudo vazio, como se fosse a primeira vez. Tem certeza que quer continuar?"
+    );
     if (!ok) return;
     const { data: u } = await supabase.auth.getUser();
     if (!u?.user) return;
     await supabase.from("kv_store").delete().eq("user_id", u.user.id);
-    await supabase.auth.signOut();
+    if (sair) await supabase.auth.signOut();
+    else window.location.reload();
   }
 
   return (
@@ -4043,6 +4081,31 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
         )}
       </div>
 
+      <div className="strip" style={{ marginBottom: 11 }}>
+        <div className="stripBtn" style={{ cursor: "default" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14 }}>🎨</span>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>Tema</span>
+          </div>
+        </div>
+        <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {[
+            { k: "claro", lb: "Claro", bg: "#F5F6FA", cor: "#F5385D" },
+            { k: "escuro", lb: "Escuro", bg: "#12141F", cor: "#FF5577" },
+            { k: "hardcore", lb: "Hardcore", bg: "#0A0A0A", cor: "#FF1F3D" },
+            { k: "feminino", lb: "Feminino", bg: "#FFF6F8", cor: "#FF7AA2" },
+          ].map((t) => (
+            <button key={t.k} onClick={() => persist({ ...data, tema: t.k })}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 12, border: `1.5px solid ${(data.tema || "claro") === t.k ? "var(--violet)" : "var(--rule)"}`, background: (data.tema || "claro") === t.k ? "var(--violet-s)" : "#fff" }}>
+              <span style={{ width: 20, height: 20, borderRadius: 999, background: t.bg, border: "1.5px solid var(--rule)", flex: "0 0 auto", position: "relative", overflow: "hidden" }}>
+                <span style={{ position: "absolute", inset: 0, background: t.cor, clipPath: "polygon(0 0, 100% 0, 0 100%)" }} />
+              </span>
+              <span style={{ fontSize: 12.5, fontWeight: 700 }}>{t.lb}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="strip">
         <button className="stripBtn" onClick={() => setAbertoDados(!abertoDados)}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0 }}>
@@ -4063,9 +4126,13 @@ function Perfil({ data, cfg, refModeloPadrao, persist, flash }) {
               onClick={() => supabase.auth.signOut()}>
               Sair da conta
             </button>
+            <button className="ghost" style={{ width: "100%", padding: 13, marginBottom: 9, color: "var(--coral-d)", borderColor: "var(--coral-s)", fontWeight: 700 }}
+              onClick={() => excluirDados(false)}>
+              Excluir meus dados
+            </button>
             <button className="ghost" style={{ width: "100%", padding: 13, color: "#fff", background: "var(--coral-d)", borderColor: "var(--coral-d)", fontWeight: 700 }}
-              onClick={excluirConta}>
-              Excluir todos os meus dados
+              onClick={() => excluirDados(true)}>
+              Excluir meus dados e sair
             </button>
           </div>
         )}
