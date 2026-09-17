@@ -2,12 +2,38 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#ECEEE9" />
-    <title>Nutri · Pedro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#F5385D" />
+    <title>MyFitPath</title>
+
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- iOS: faz o Safari tratar como app em tela cheia quando adicionado à Tela de Início -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MyFitPath" />
+
+    <!-- Android/Chrome -->
+    <meta name="mobile-web-app-capable" content="yes" />
   </head>
   <body style="margin:0;">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Guarda o convite de instalação do Chrome para o botão "Instalar o app" do Perfil.
+      window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        window.__pwaPrompt = e;
+        window.dispatchEvent(new Event("pwa-prompt"));
+      });
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js").catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

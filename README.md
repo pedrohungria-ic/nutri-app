@@ -74,3 +74,9 @@ nutri-app/
     ├── main.jsx        # ponto de entrada
     └── App.jsx         # o app inteiro (o mesmo código de dentro do Claude)
 ```
+
+## Repositório de arquivos (Perfil → Meus arquivos)
+
+Rode uma vez `supabase/storage.sql` no SQL Editor do Supabase. Ele cria o bucket privado `arquivos`
+(limite de 50 MB por arquivo) e as regras para que cada conta só acesse a própria pasta. Os laudos
+lidos em Evolução → Exames são guardados automaticamente na pasta "Exames de sangue".
